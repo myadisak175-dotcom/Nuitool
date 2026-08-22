@@ -26,6 +26,7 @@ test('benchmark fetch failure falls back to local device signals', () => {
 test('live calibration only downgrades quality when FPS misses target', () => {
   assert.equal(calibrateAutoQuality('high', 60), 'high');
   assert.equal(calibrateAutoQuality('high', 44), 'balanced');
+  assert.equal(calibrateAutoQuality('high', 28), 'eco');
   assert.equal(calibrateAutoQuality('balanced', 30), 'eco');
   assert.equal(calibrateAutoQuality('eco', 20), 'eco');
 });
