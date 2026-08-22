@@ -1,5 +1,4 @@
 import * as pc from 'playcanvas';
-import './styles.css';
 import { ASSET_CATALOG, createAsset, createSelectionMarker } from './assets.js';
 import { ProjectStore } from './project.js';
 
@@ -311,45 +310,45 @@ function renderLogicPanel() {
     <div class="property-row"><div><label>Rotation</label><small>หมุนวัตถุทีละ 15°</small></div><div class="segmented"><button data-rotate="-15">−</button><button data-rotate="15">＋</button></div></div>
     <div class="property-row"><div><label>Size</label><small>ปรับขนาดแบบง่าย</small></div><div class="segmented"><button data-scale="0.9">−</button><button data-scale="1.1">＋</button></div></div>
     ${character ? `<div class="section-title">Movement</div><div class="choice-grid"><button class="choice ${entity.behavior === 'stay' ? 'active' : ''}" data-behavior="stay"><span>📍</span><strong>Stay</strong></button><button class="choice ${entity.behavior === 'wander' ? 'active' : ''}" data-behavior="wander"><span>🚶</span><strong>Walk around</strong></button><button class="choice ${entity.behavior === 'follow' ? 'active' : ''}" data-behavior="follow"><span>🧲</span><strong>Follow</strong></button></div>` : ''}
-    ${entity.type === 'npc' ? `<div class="section-title">Interaction</div><div class="property-row"><div><label>Talk when near</label><small>ผู้เล่นเข้าใกล้แล้วพูด</small></div><div class="segmented"><button data-talk="on" class="${talk ? 'active' : ''}">ON</button><button data-talk="off" class="${!talk ? 'active' : ''}">OFF</button></div></div>` : ''}
-    <div class="section-title">Object</div>
-    <div class="toolbar-row"><button data-duplicate>⧉ Copy</button><button data-delete style="grid-column: span 3;color:#ffdfe5">Delete</button></div>`;
+    ${entity.type === 'npc' ? `<div class="section-title">Interaction</div><div class="property-row"><div><label>Talk when near</label><small>${talk ? entity.interaction.text : 'ปิดอยู่'}</small></div><div class="segmented"><button data-talk="off" class="${!talk ? 'active' : ''}">Off</button><button data-talk="on" class="${talk ? 'active' : ''}">On</button></div></div>` : ''}
+    <div class="section-title">Manage</div><div class="toolbar-row"><button data-duplicate>Copy</button><button data-delete class="danger">Delete</button></div>`;
   bindClose();
-  panel.querySelectorAll('[data-move]').forEach((button) => button.addEventListener('click', () => {
-    const current = store.getEntity(entity.id);
-    const p = [...current.position];
-    const step = .6;
-    if (button.dataset.move === 'left') p[0] -= step;
-    if (button.dataset.move === 'right') p[0] += step;
-    if (button.dataset.move === 'up') p[2] -= step;
-    if (button.dataset.move === 'down') p[2] += step;
-    store.updateEntity(entity.id, { position: p });
-  }));
-  panel.querySelectorAll('[data-rotate]').forEach((button) => button.addEventListener('click', () => {
-    const current = store.getEntity(entity.id);
-    store.updateEntity(entity.id, { rotationY: (current.rotationY || 0) + Number(button.dataset.rotate) });
-  }));
-  panel.querySelectorAll('[data-scale]').forEach((button) => button.addEventListener('click', () => {
-    const current = store.getEntity(entity.id);
-    const next = Math.min(3, Math.max(.35, (current.scale || 1) * Number(button.dataset.scale)));
-    store.updateEntity(entity.id, { scale: Number(next.toFixed(2)) });
-  }));
+
+  const move = (dx, dz) => store.updateEntity(entity.id, { position: [entity.position[0] + dx, entity.position[1], entity.position[2] + dz] });
+  panel.querySelector('[data-move="left"]')?.addEventListener('click', () => move(-.5, 0));
+  panel.querySelector('[data-move="right"]')?.addEventListener('click', () => move(.5, 0));
+  panel.querySelector('[data-move="up"]')?.addEventListener('click', () => move(0, -.5));
+  panel.querySelector('[data-move="down"]')?.addEventListener('click', () => move(0, .5));
+  panel.querySelectorAll('[data-rotate]').forEach((button) => button.addEventListener('click', () => store.updateEntity(entity.id, { rotationY: (entity.rotationY || 0) + Number(button.dataset.rotate) })));
+  panel.querySelectorAll('[data-scale]').forEach((button) => button.addEventListener('click', () => store.updateEntity(entity.id, { scale: Math.min(3, Math.max(.3, (entity.scale || 1) * Number(button.dataset.scale))) })));
   panel.querySelectorAll('[data-behavior]').forEach((button) => button.addEventListener('click', () => store.updateEntity(entity.id, { behavior: button.dataset.behavior })));
-  panel.querySelectorAll('[data-talk]').forEach((button) => button.addEventListener('click', () => {
-    store.updateEntity(entity.id, { interaction: button.dataset.talk === 'on' ? { type: 'talk', text: entity.interaction?.text || 'สวัสดี!' } : null });
-  }));
+  panel.querySelector('[data-talk="on"]')?.addEventListener('click', () => store.updateEntity(entity.id, { interaction: { type: 'talk', text: entity.interaction?.text || 'สวัสดี!' } }));
+  panel.querySelector('[data-talk="off"]')?.addEventListener('click', () => store.updateEntity(entity.id, { interaction: null }));
   panel.querySelector('[data-duplicate]')?.addEventListener('click', () => {
-    const copy = store.duplicateEntity(entity.id); if (copy) { selectedId = copy.id; updateSelectionMarker(); renderLogicPanel(); }
+    const copy = store.duplicateEntity(entity.id); if (copy) { selectedId = copy.id; renderLogicPanel(); }
   });
   panel.querySelector('[data-delete]')?.addEventListener('click', () => {
-    if (store.removeEntity(entity.id)) { selectedId = null; closePanel(); updateSelectionMarker(); }
+    if (store.removeEntity(entity.id)) { selectedId = null; closePanel(); selectionPill.classList.add('hidden'); }
   });
 }
 
-function openProjectMenu() {
+for (const button of bottomNav.querySelectorAll('[data-panel]')) {
+  button.addEventListener('click', () => {
+    if (button.dataset.panel === 'add' && activePlacement) {
+      activePlacement = null;
+      placementHint.classList.add('hidden');
+      showToast('ยกเลิกการวาง');
+      return;
+    }
+    openPanel(button.dataset.panel);
+  });
+}
+
+function showProjectMenu() {
+  if (playMode) return;
   activePanel = 'menu';
   panel.classList.remove('hidden');
-  panel.innerHTML = `${panelHeader('Project', 'My First Game • autosaved on this device')}
+  panel.innerHTML = `${panelHeader('Project', 'My First Game')}
     <div class="menu-sheet">
       <button data-export>⇩ Export project JSON</button>
       <button data-reset>↺ Reset starter world</button>
@@ -359,348 +358,246 @@ function openProjectMenu() {
   panel.querySelector('[data-export]')?.addEventListener('click', () => {
     const blob = new Blob([store.exportJSON()], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'nuitool-project.json'; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    showToast('Exported project JSON');
+    const a = document.createElement('a'); a.href = url; a.download = 'nuitool-project.json'; a.click(); URL.revokeObjectURL(url);
   });
-  panel.querySelector('[data-reset]')?.addEventListener('click', () => {
-    store.reset(); selectedId = null; closePanel(); showToast('Starter world restored');
-  });
-  panel.querySelector('[data-about]')?.addEventListener('click', () => showToast('Nuitool v0.1 • Touch-first game creator'));
+  panel.querySelector('[data-reset]')?.addEventListener('click', () => { if (confirm('Reset project?')) store.reset(); });
+  panel.querySelector('[data-about]')?.addEventListener('click', () => showToast('Nuitool — touch-first game creator. Easy first. Powerful later.', 3000));
 }
 
-function screenToGround(clientX, clientY) {
-  const rect = canvas.getBoundingClientRect();
-  const x = clientX - rect.left;
-  const y = clientY - rect.top;
-  const near = camera.camera.screenToWorld(x, y, camera.camera.nearClip);
-  const far = camera.camera.screenToWorld(x, y, Math.min(camera.camera.farClip, 120));
-  const direction = far.clone().sub(near);
-  if (Math.abs(direction.y) < 0.00001) return null;
-  const t = -near.y / direction.y;
+document.querySelector('#menu-btn').addEventListener('click', showProjectMenu);
+document.querySelector('#undo-btn').addEventListener('click', () => { if (!store.undo()) showToast('ไม่มีอะไรให้ย้อนกลับ'); });
+document.querySelector('#redo-btn').addEventListener('click', () => { if (!store.redo()) showToast('ไม่มีอะไรให้ทำซ้ำ'); });
+
+let pointerStart = null;
+let orbiting = false;
+let moved = false;
+let pinchStart = 0;
+
+function screenToGround(x, y) {
+  const from = camera.camera.screenToWorld(x, y, camera.camera.nearClip);
+  const to = camera.camera.screenToWorld(x, y, camera.camera.farClip);
+  const direction = to.clone().sub(from);
+  if (Math.abs(direction.y) < 0.0001) return null;
+  const t = -from.y / direction.y;
   if (t < 0) return null;
-  return near.clone().add(direction.mulScalar(t));
+  return from.clone().add(direction.mulScalar(t));
 }
 
-function pickNearest(clientX, clientY) {
-  const rect = canvas.getBoundingClientRect();
-  const x = clientX - rect.left;
-  const y = clientY - rect.top;
+function findSelectableAt(x, y) {
+  const groundPoint = screenToGround(x, y);
+  if (!groundPoint) return null;
   let best = null;
-  let bestDistance = 56;
+  let bestDistance = Infinity;
   for (const descriptor of store.project.entities) {
     if (descriptor.id === 'player') continue;
-    const view = entityViews.get(descriptor.id);
-    if (!view) continue;
-    const screen = camera.camera.worldToScreen(view.getPosition());
-    const dx = screen.x - x;
-    const dy = screen.y - y;
-    const distance = Math.hypot(dx, dy);
-    if (distance < bestDistance) { best = descriptor; bestDistance = distance; }
+    const dx = descriptor.position[0] - groundPoint.x;
+    const dz = descriptor.position[2] - groundPoint.z;
+    const distance = Math.hypot(dx, dz);
+    const radius = Math.max(.75, 1.2 * (descriptor.scale || 1));
+    if (distance < radius && distance < bestDistance) { best = descriptor; bestDistance = distance; }
   }
   return best;
 }
 
-const pointers = new Map();
-let gestureMoved = false;
-let pointerStart = null;
-let lastPinchDistance = null;
-
 canvas.addEventListener('pointerdown', (event) => {
   if (playMode) return;
-  canvas.setPointerCapture?.(event.pointerId);
-  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
   pointerStart = { x: event.clientX, y: event.clientY, yaw: orbitYaw, pitch: orbitPitch };
-  gestureMoved = false;
-  if (pointers.size === 2) {
-    const [a, b] = [...pointers.values()];
-    lastPinchDistance = Math.hypot(a.x - b.x, a.y - b.y);
-  }
+  orbiting = true; moved = false;
+  canvas.setPointerCapture?.(event.pointerId);
 });
-
 canvas.addEventListener('pointermove', (event) => {
-  if (playMode || !pointers.has(event.pointerId)) return;
-  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-  if (pointers.size === 2) {
-    const [a, b] = [...pointers.values()];
-    const distance = Math.hypot(a.x - b.x, a.y - b.y);
-    if (lastPinchDistance) {
-      orbitDistance = pc.math.clamp(orbitDistance - (distance - lastPinchDistance) * 0.025, 7, 36);
-      updateCamera();
-    }
-    lastPinchDistance = distance;
-    gestureMoved = true;
-    return;
-  }
-  if (!pointerStart) return;
+  if (playMode || !orbiting || !pointerStart) return;
   const dx = event.clientX - pointerStart.x;
   const dy = event.clientY - pointerStart.y;
-  if (Math.hypot(dx, dy) > 7) gestureMoved = true;
-  if (gestureMoved) {
-    orbitYaw = pointerStart.yaw - dx * .22;
-    orbitPitch = pc.math.clamp(pointerStart.pitch + dy * .18, 18, 70);
+  if (Math.hypot(dx, dy) > 6) moved = true;
+  if (!activePlacement && moved) {
+    orbitYaw = pointerStart.yaw - dx * .25;
+    orbitPitch = Math.max(18, Math.min(72, pointerStart.pitch - dy * .18));
     updateCamera();
   }
 });
-
 canvas.addEventListener('pointerup', (event) => {
   if (playMode) return;
-  const wasTwoFinger = pointers.size > 1;
-  pointers.delete(event.pointerId);
-  if (!pointers.size) lastPinchDistance = null;
-  if (wasTwoFinger || gestureMoved) { pointerStart = null; return; }
-
-  if (activePlacement) {
-    const point = screenToGround(event.clientX, event.clientY);
-    if (point) {
-      const entity = store.addEntity(activePlacement.type, activePlacement.name, [Number(point.x.toFixed(2)), 0, Number(point.z.toFixed(2))]);
-      selectedId = entity.id;
-      activePlacement = null;
-      placementHint.classList.add('hidden');
-      updateSelectionMarker();
-      showToast(`${iconFor(entity.type)} วาง ${entity.name} แล้ว`);
-    }
-  } else {
-    const picked = pickNearest(event.clientX, event.clientY);
-    selectedId = picked?.id || null;
-    updateSelectionMarker();
-    if (picked) {
-      activePanel = 'logic';
-      panel.classList.remove('hidden');
-      renderLogicPanel();
+  orbiting = false;
+  if (!moved) {
+    if (activePlacement) {
+      const p = screenToGround(event.clientX, event.clientY);
+      if (p) {
+        const created = store.addEntity(activePlacement.type, activePlacement.name, [Number(p.x.toFixed(2)), 0, Number(p.z.toFixed(2))]);
+        selectedId = created.id;
+        updateSelectionMarker();
+        showToast(`${activePlacement.icon} วาง ${activePlacement.name} แล้ว`);
+      }
+    } else {
+      const picked = findSelectableAt(event.clientX, event.clientY);
+      if (picked) { selectedId = picked.id; updateSelectionMarker(); renderLogicPanel(); activePanel = 'logic'; panel.classList.remove('hidden'); }
+      else { selectedId = null; updateSelectionMarker(); selectionPill.classList.add('hidden'); }
     }
   }
   pointerStart = null;
 });
 
-canvas.addEventListener('pointercancel', (event) => {
-  pointers.delete(event.pointerId);
-  pointerStart = null;
-});
+canvas.addEventListener('wheel', (event) => {
+  if (playMode) return;
+  orbitDistance = Math.max(7, Math.min(34, orbitDistance + Math.sign(event.deltaY) * 1.2));
+  updateCamera();
+}, { passive: true });
 
-bottomNav.querySelectorAll('[data-panel]').forEach((button) => button.addEventListener('click', () => {
-  if (button.dataset.panel === 'add' && activePlacement) {
-    activePlacement = null;
-    placementHint.classList.add('hidden');
-    showToast('ยกเลิกการวาง');
-    return;
-  }
-  openPanel(button.dataset.panel);
-}));
-
-document.querySelector('#undo-btn').addEventListener('click', () => { if (!playMode && store.undo()) showToast('Undo'); });
-document.querySelector('#redo-btn').addEventListener('click', () => { if (!playMode && store.redo()) showToast('Redo'); });
-document.querySelector('#menu-btn').addEventListener('click', openProjectMenu);
-
-const joystickState = { x: 0, y: 0, pointerId: null };
-function setJoystick(event) {
-  const rect = joystick.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-  let dx = event.clientX - cx;
-  let dy = event.clientY - cy;
-  const max = 34;
-  const length = Math.hypot(dx, dy);
-  if (length > max) { dx = dx / length * max; dy = dy / length * max; }
-  joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
-  joystickState.x = dx / max;
-  joystickState.y = dy / max;
-}
-joystick.addEventListener('pointerdown', (event) => {
-  joystickState.pointerId = event.pointerId;
-  joystick.setPointerCapture?.(event.pointerId);
-  setJoystick(event);
-});
-joystick.addEventListener('pointermove', (event) => { if (joystickState.pointerId === event.pointerId) setJoystick(event); });
-function releaseJoystick(event) {
-  if (joystickState.pointerId !== event.pointerId) return;
-  joystickState.pointerId = null; joystickState.x = 0; joystickState.y = 0;
-  joystickKnob.style.transform = 'translate(0,0)';
-}
-joystick.addEventListener('pointerup', releaseJoystick);
-joystick.addEventListener('pointercancel', releaseJoystick);
+canvas.addEventListener('touchstart', (event) => {
+  if (playMode || event.touches.length !== 2) return;
+  const [a, b] = event.touches;
+  pinchStart = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}, { passive: true });
+canvas.addEventListener('touchmove', (event) => {
+  if (playMode || event.touches.length !== 2 || !pinchStart) return;
+  const [a, b] = event.touches;
+  const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  orbitDistance = Math.max(7, Math.min(34, orbitDistance * (pinchStart / distance)));
+  pinchStart = distance;
+  updateCamera();
+}, { passive: true });
+canvas.addEventListener('touchend', () => { pinchStart = 0; }, { passive: true });
 
 function enterPlayMode() {
-  if (playMode) return;
   playMode = true;
   closePanel();
   activePlacement = null;
-  placementHint.classList.add('hidden');
   selectionMarker.enabled = false;
   selectionPill.classList.add('hidden');
+  placementHint.classList.add('hidden');
   bottomNav.classList.add('hidden');
   document.querySelector('.topbar').classList.add('hidden');
   healthPill.classList.add('hidden');
-  joystick.classList.remove('hidden');
   editModeBtn.classList.remove('hidden');
+  joystick.classList.remove('hidden');
   modeLabel.textContent = 'Play mode';
-  lastInteractionKey = '';
-  const player = entityViews.get('player');
-  if (player) {
-    orbitTarget.copy(player.getPosition()).add(new pc.Vec3(0, 1, 0));
-    orbitDistance = 10;
-    orbitPitch = 28;
-    updateCamera();
-  }
+  showToast('Play mode — เดินเข้าใกล้ Mia เพื่อคุย');
 }
 
 function exitPlayMode() {
-  if (!playMode) return;
   playMode = false;
-  joystick.classList.add('hidden');
-  editModeBtn.classList.add('hidden');
   bottomNav.classList.remove('hidden');
   document.querySelector('.topbar').classList.remove('hidden');
   healthPill.classList.remove('hidden');
+  editModeBtn.classList.add('hidden');
+  joystick.classList.add('hidden');
   modeLabel.textContent = 'Edit mode';
-  orbitDistance = 18;
-  orbitPitch = 34;
-  orbitTarget.set(0, .7, 0);
+  joystickKnob.style.transform = 'translate(0, 0)';
+  joystickVector.set(0, 0);
   syncScene();
-  updateCamera();
   showToast('กลับสู่ Edit mode');
 }
-
 playBtn.addEventListener('click', enterPlayMode);
 editModeBtn.addEventListener('click', exitPlayMode);
 
-function updatePlayer(dt) {
-  const player = entityViews.get('player');
-  if (!player) return;
-  const inputLength = Math.hypot(joystickState.x, joystickState.y);
-  if (inputLength > .08) {
-    const forward = camera.forward.clone();
-    forward.y = 0;
-    forward.normalize();
-    const right = camera.right.clone();
-    right.y = 0;
-    right.normalize();
-    const move = right.mulScalar(joystickState.x).add(forward.mulScalar(-joystickState.y));
-    if (move.lengthSq() > .001) {
-      move.normalize();
-      const pos = player.getPosition().clone().add(move.mulScalar(dt * 4.2));
-      pos.x = pc.math.clamp(pos.x, -38, 38);
-      pos.z = pc.math.clamp(pos.z, -38, 38);
-      player.setPosition(pos);
-      const angle = Math.atan2(move.x, move.z) * pc.math.RAD_TO_DEG;
-      player.setEulerAngles(0, angle, 0);
-    }
-  }
-  const target = player.getPosition().clone().add(new pc.Vec3(0, 1.0, 0));
-  orbitTarget.lerp(orbitTarget, target, 1 - Math.pow(.001, dt));
-  updateCamera();
+const joystickVector = new pc.Vec2();
+let joystickPointer = null;
+function updateJoystick(clientX, clientY) {
+  const rect = joystick.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+  let dx = clientX - cx, dy = clientY - cy;
+  const max = rect.width * .31;
+  const length = Math.hypot(dx, dy);
+  if (length > max) { dx = dx / length * max; dy = dy / length * max; }
+  joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+  joystickVector.set(dx / max, dy / max);
+}
+joystick.addEventListener('pointerdown', (event) => { joystickPointer = event.pointerId; joystick.setPointerCapture(event.pointerId); updateJoystick(event.clientX, event.clientY); });
+joystick.addEventListener('pointermove', (event) => { if (joystickPointer === event.pointerId) updateJoystick(event.clientX, event.clientY); });
+joystick.addEventListener('pointerup', (event) => { if (joystickPointer === event.pointerId) { joystickPointer = null; joystickVector.set(0, 0); joystickKnob.style.transform = 'translate(0,0)'; } });
+
+function moveToward(entity, target, speed, dt) {
+  const p = entity.getPosition();
+  const direction = target.clone().sub(p); direction.y = 0;
+  const distance = direction.length();
+  if (distance < .03) return distance;
+  direction.normalize();
+  const step = Math.min(distance, speed * dt);
+  entity.translate(direction.x * step, 0, direction.z * step);
+  const yaw = Math.atan2(direction.x, direction.z) * pc.math.RAD_TO_DEG;
+  entity.setEulerAngles(0, yaw, 0);
+  return distance;
 }
 
-function updateBehaviors(dt) {
+function updateRuntime(dt) {
   const player = entityViews.get('player');
   if (!player) return;
+
+  if (playMode) {
+    const yaw = orbitYaw * pc.math.DEG_TO_RAD;
+    const forward = new pc.Vec3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const right = new pc.Vec3(Math.cos(yaw), 0, -Math.sin(yaw));
+    const velocity = forward.mulScalar(-joystickVector.y).add(right.mulScalar(joystickVector.x));
+    if (velocity.lengthSq() > .01) {
+      velocity.normalize();
+      player.translate(velocity.x * 3.2 * dt, 0, velocity.z * 3.2 * dt);
+      player.setEulerAngles(0, Math.atan2(velocity.x, velocity.z) * pc.math.RAD_TO_DEG, 0);
+    }
+    const pp = player.getPosition();
+    orbitTarget.lerp(orbitTarget, new pc.Vec3(pp.x, .9, pp.z), Math.min(1, dt * 6));
+    updateCamera();
+  }
+
   const playerPos = player.getPosition();
   for (const descriptor of store.project.entities) {
-    if (descriptor.id === 'player') continue;
-    const view = entityViews.get(descriptor.id);
-    const state = runtime.get(descriptor.id);
-    if (!view || !state) continue;
+    const view = entityViews.get(descriptor.id); const state = runtime.get(descriptor.id);
+    if (!view || !state || descriptor.id === 'player') continue;
 
-    if (descriptor.behavior === 'spin') {
-      view.rotate(0, 90 * dt, 0);
+    if (descriptor.behavior === 'spin') view.rotate(0, dt * 80, 0);
+    if (descriptor.type === 'slime') {
+      state.bob += dt * 3.4;
       const p = view.getPosition();
-      view.setPosition(p.x, descriptor.position[1] + Math.sin(performance.now() * .004 + state.bob) * .12, p.z);
+      view.setPosition(p.x, Math.sin(state.bob) * .05, p.z);
     }
-
-    if (descriptor.behavior === 'wander' && (descriptor.type === 'npc' || descriptor.type === 'slime')) {
-      state.wanderTimer -= dt;
-      const pos = view.getPosition();
-      if (state.wanderTimer <= 0 || pos.distance(state.wanderTarget) < .3) {
-        const angle = Math.random() * Math.PI * 2;
-        const radius = 1.5 + Math.random() * 3;
-        state.wanderTarget.set(state.origin.x + Math.cos(angle) * radius, 0, state.origin.z + Math.sin(angle) * radius);
-        state.wanderTimer = 1.8 + Math.random() * 2.8;
+    if (playMode && (descriptor.type === 'npc' || descriptor.type === 'slime')) {
+      if (descriptor.behavior === 'wander') {
+        state.wanderTimer -= dt;
+        if (state.wanderTimer <= 0 || view.getPosition().clone().sub(state.wanderTarget).length() < .25) {
+          const angle = Math.random() * Math.PI * 2, radius = 1.2 + Math.random() * 3.4;
+          state.wanderTarget.set(state.origin.x + Math.cos(angle) * radius, 0, state.origin.z + Math.sin(angle) * radius);
+          state.wanderTimer = 2 + Math.random() * 4;
+        }
+        moveToward(view, state.wanderTarget, descriptor.type === 'slime' ? .85 : 1.15, dt);
       }
-      const direction = state.wanderTarget.clone().sub(pos); direction.y = 0;
-      if (direction.lengthSq() > .04) {
-        direction.normalize();
-        view.setPosition(pos.clone().add(direction.mulScalar(dt * (descriptor.type === 'slime' ? 1.1 : 1.35))));
-        view.setEulerAngles(0, Math.atan2(direction.x, direction.z) * pc.math.RAD_TO_DEG, 0);
+      if (descriptor.behavior === 'follow') {
+        const target = playerPos.clone();
+        if (view.getPosition().clone().sub(target).length() > 1.7) moveToward(view, target, 1.5, dt);
       }
     }
 
-    if (descriptor.behavior === 'follow' && (descriptor.type === 'npc' || descriptor.type === 'slime')) {
-      const pos = view.getPosition();
-      const direction = playerPos.clone().sub(pos); direction.y = 0;
-      const distance = direction.length();
-      if (distance > 2.2) {
-        direction.normalize();
-        view.setPosition(pos.clone().add(direction.mulScalar(dt * 1.7)));
-        view.setEulerAngles(0, Math.atan2(direction.x, direction.z) * pc.math.RAD_TO_DEG, 0);
-      }
+    if (playMode && descriptor.interaction) {
+      const distance = view.getPosition().clone().sub(playerPos).length();
+      const key = `${descriptor.id}:${descriptor.interaction.type}`;
+      if (distance < 1.8 && lastInteractionKey !== key) {
+        lastInteractionKey = key;
+        if (descriptor.interaction.type === 'talk') showToast(`${descriptor.name}: ${descriptor.interaction.text}`, 2600);
+        if (descriptor.interaction.type === 'collect') {
+          showToast(`🪙 ${descriptor.interaction.text}`, 1700);
+          view.enabled = false;
+        }
+      } else if (distance > 2.4 && lastInteractionKey === key) lastInteractionKey = '';
     }
-  }
-}
-
-function updateInteractions() {
-  if (!playMode) return;
-  const player = entityViews.get('player');
-  if (!player) return;
-  const playerPos = player.getPosition();
-  let nearby = null;
-  let nearest = 2.25;
-  for (const descriptor of store.project.entities) {
-    if (!descriptor.interaction) continue;
-    const view = entityViews.get(descriptor.id);
-    if (!view || !view.enabled) continue;
-    const distance = playerPos.distance(view.getPosition());
-    if (distance < nearest) { nearby = { descriptor, view, distance }; nearest = distance; }
-  }
-  if (!nearby) { lastInteractionKey = ''; return; }
-  const { descriptor, view } = nearby;
-  const key = `${descriptor.id}:${descriptor.interaction.type}`;
-  if (key === lastInteractionKey) return;
-  lastInteractionKey = key;
-  if (descriptor.interaction.type === 'talk') {
-    showToast(`${descriptor.name}: ${descriptor.interaction.text}`, 2600);
-  }
-  if (descriptor.interaction.type === 'collect') {
-    view.enabled = false;
-    showToast(descriptor.interaction.text || 'Collected!', 1800);
   }
 }
 
 function updateHealth(dt) {
-  fpsFrames += 1;
-  fpsAccumulator += dt;
-  healthTimer += dt;
-  if (fpsAccumulator >= .7) {
+  fpsAccumulator += dt; fpsFrames++;
+  if (fpsAccumulator >= .55) {
     fps = Math.round(fpsFrames / fpsAccumulator);
-    fpsAccumulator = 0;
-    fpsFrames = 0;
+    fpsAccumulator = 0; fpsFrames = 0;
   }
-  if (healthTimer < 1) return;
+  healthTimer += dt;
+  if (healthTimer < 1.2 || playMode) return;
   healthTimer = 0;
-  const objects = store.project.entities.length;
-  let level = 'good';
-  if (fps < 36 || objects > 180) level = 'warn';
-  if (fps < 24 || objects > 350) level = 'bad';
-  healthPill.textContent = level === 'good'
-    ? `🟢 Game Health: Good · ${objects} objects`
-    : level === 'warn'
-      ? `🟠 Game Health: Check · ${fps} FPS`
-      : `🔴 Game Health: Heavy · ${fps} FPS`;
+  const count = store.project.entities.length;
+  if (fps < 30 || count > 260) healthPill.textContent = `🔴 Game Health: Heavy • ${fps} FPS`;
+  else if (fps < 48 || count > 140) healthPill.textContent = `🟠 Game Health: Watch • ${fps} FPS`;
+  else healthPill.textContent = `🟢 Game Health: Good • ${fps} FPS`;
 }
 
 app.on('update', (dt) => {
-  if (playMode) {
-    updatePlayer(dt);
-    updateBehaviors(dt);
-    updateInteractions();
-  }
+  updateRuntime(Math.min(dt, .05));
   updateHealth(dt);
 });
 
 window.addEventListener('resize', () => app.resizeCanvas());
-
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
-}
-
-showToast('Nuitool พร้อมแล้ว • แตะ + Add เพื่อเริ่มสร้าง', 2500);
