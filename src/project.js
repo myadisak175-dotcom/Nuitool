@@ -1,3 +1,5 @@
+import { normalizeRuleCondition } from './rule-condition-policy.js';
+
 const STORAGE_KEY = 'nuitool.project.v0.1';
 
 function clone(value) {
@@ -31,6 +33,7 @@ function normalizeRule(raw, entityIds) {
       type: whenType,
       distance: Math.min(8, Math.max(0.4, finiteNumber(raw.when?.distance, defaultDistance)))
     },
+    condition: normalizeRuleCondition(raw.condition),
     action: {
       type: actionType,
       text: String(raw.action?.text || (actionType === 'collect' ? 'Collected!' : 'Hello!')).slice(0, 240)
@@ -49,6 +52,7 @@ function ruleFromLegacyInteraction(entity) {
     enabled: true,
     targetId: entity.id,
     when: { type: whenType, distance: whenType === 'player_touch' ? 1.25 : 2.35 },
+    condition: null,
     action: { type: actionType, text: String(legacy.text || (actionType === 'collect' ? 'Collected!' : 'Hello!')).slice(0, 240) }
   };
 }
@@ -152,12 +156,12 @@ export function createStarterProject() {
     rules: [
       {
         id: 'rule-mia-talk', name: 'Mia says hello', enabled: true, targetId: 'starter-npc',
-        when: { type: 'player_near', distance: 2.35 },
+        when: { type: 'player_near', distance: 2.35 }, condition: null,
         action: { type: 'message', text: 'สวัสดี! ฉันชื่อ Mia 🌱' }
       },
       {
         id: 'rule-coin-collect', name: 'Collect coin', enabled: true, targetId: 'starter-coin',
-        when: { type: 'player_touch', distance: 1.25 },
+        when: { type: 'player_touch', distance: 1.25 }, condition: null,
         action: { type: 'collect', text: 'เก็บเหรียญแล้ว +1' }
       }
     ]
@@ -247,13 +251,13 @@ export class ProjectStore {
     if (type === 'npc') {
       this.project.rules.push({
         id: uid('rule'), name: `${entity.name} says hello`, enabled: true, targetId: entity.id,
-        when: { type: 'player_near', distance: 2.35 },
+        when: { type: 'player_near', distance: 2.35 }, condition: null,
         action: { type: 'message', text: 'สวัสดี!' }
       });
     } else if (type === 'coin') {
       this.project.rules.push({
         id: uid('rule'), name: `Collect ${entity.name}`, enabled: true, targetId: entity.id,
-        when: { type: 'player_touch', distance: 1.25 },
+        when: { type: 'player_touch', distance: 1.25 }, condition: null,
         action: { type: 'collect', text: 'เก็บแล้ว!' }
       });
     }
@@ -316,12 +320,16 @@ export class ProjectStore {
     this.checkpoint();
     const whenType = ['player_near', 'player_touch'].includes(config.whenType) ? config.whenType : 'player_near';
     const actionType = ['message', 'collect'].includes(config.actionType) ? config.actionType : 'message';
+    const condition = config.conditionType === 'world_sky'
+      ? normalizeRuleCondition({ type: 'world_sky', value: config.conditionValue })
+      : normalizeRuleCondition(config.condition);
     const rule = {
       id: uid('rule'),
       name: String(config.name || `${whenType} → ${actionType}`).slice(0, 80),
       enabled: true,
       targetId,
       when: { type: whenType, distance: whenType === 'player_touch' ? 1.25 : 2.35 },
+      condition,
       action: { type: actionType, text: String(config.text || (actionType === 'collect' ? 'Collected!' : 'Hello!')).slice(0, 240) }
     };
     this.project.rules.push(rule);
@@ -332,7 +340,8 @@ export class ProjectStore {
   updateRule(id, patch = {}) {
     const rule = (this.project.rules || []).find((item) => item.id === id);
     if (!rule) return null;
-    this.checkpoint();
+    const runtimeOnly = patch.runtimeOnly === true;
+    if (!runtimeOnly) this.checkpoint();
     if (typeof patch.enabled === 'boolean') rule.enabled = patch.enabled;
     if (patch.text != null) rule.action.text = String(patch.text).slice(0, 240);
     if (['player_near', 'player_touch'].includes(patch.whenType)) {
@@ -340,7 +349,14 @@ export class ProjectStore {
       rule.when.distance = patch.whenType === 'player_touch' ? 1.25 : 2.35;
     }
     if (['message', 'collect'].includes(patch.actionType)) rule.action.type = patch.actionType;
-    this.notify('rule:update');
+    if ('condition' in patch) rule.condition = normalizeRuleCondition(patch.condition);
+    if (patch.conditionType === 'always' || patch.conditionType === null) rule.condition = null;
+    if (patch.conditionType === 'world_sky') {
+      rule.condition = normalizeRuleCondition({ type: 'world_sky', value: patch.conditionValue || rule.condition?.value });
+    } else if (patch.conditionValue && rule.condition?.type === 'world_sky') {
+      rule.condition = normalizeRuleCondition({ type: 'world_sky', value: patch.conditionValue });
+    }
+    if (!runtimeOnly) this.notify('rule:update');
     return rule;
   }
 
