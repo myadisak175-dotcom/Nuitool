@@ -1,0 +1,75 @@
+.monitor-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.monitor-section-head button {
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(255,255,255,.06);
+  color: #fff;
+  font: inherit;
+  font-size: 9px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.playtest-history {
+  display: grid;
+  gap: 7px;
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 9px;
+  align-items: center;
+  border: 1px solid rgba(255,255,255,.065);
+  border-radius: 14px;
+  padding: 9px 10px;
+  background: rgba(255,255,255,.03);
+}
+
+.history-row strong,
+.history-row small {
+  display: block;
+}
+
+.history-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.history-row small {
+  margin-top: 3px;
+  font-size: 9px;
+  opacity: .42;
+}
+
+.history-metrics {
+  display: grid;
+  gap: 3px;
+  text-align: right;
+}
+
+.history-metrics span {
+  font-size: 8px;
+  opacity: .6;
+}
+
+.monitor-action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.monitor-action-row .wide-btn {
+  font-size: 10px;
+  padding-inline: 8px;
+}
