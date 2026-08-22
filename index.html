@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#0b1020" />
+    <meta name="description" content="Nuitool — touch-first mobile game creator" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <title>Nuitool</title>
+  </head>
+  <body>
+    <div id="app-shell">
+      <canvas id="app-canvas"></canvas>
+
+      <header class="topbar glass">
+        <div class="brand">
+          <div class="brand-mark">N</div>
+          <div>
+            <strong>Nuitool</strong>
+            <span id="mode-label">Edit mode</span>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button id="undo-btn" class="icon-btn" aria-label="Undo">↶</button>
+          <button id="redo-btn" class="icon-btn" aria-label="Redo">↷</button>
+          <button id="menu-btn" class="icon-btn" aria-label="Project menu">⋯</button>
+        </div>
+      </header>
+
+      <div id="health-pill" class="health-pill glass">🟢 Game Health: Good</div>
+      <div id="selection-pill" class="selection-pill glass hidden"></div>
+
+      <aside id="panel" class="panel glass hidden" aria-live="polite"></aside>
+
+      <div id="placement-hint" class="placement-hint glass hidden">แตะพื้นเพื่อวาง • ลากเพื่อหมุนกล้อง</div>
+
+      <div id="toast" class="toast hidden"></div>
+
+      <div id="joystick" class="joystick hidden" aria-label="Move player">
+        <div class="joystick-ring"><div id="joystick-knob" class="joystick-knob"></div></div>
+      </div>
+
+      <button id="edit-mode-btn" class="edit-mode-btn glass hidden">■ Edit</button>
+
+      <nav id="bottom-nav" class="bottom-nav glass">
+        <button class="nav-btn" data-panel="world"><span>🌍</span><small>World</small></button>
+        <button class="nav-btn primary" data-panel="add"><span>＋</span><small>Add</small></button>
+        <button class="nav-btn" data-panel="logic"><span>⚡</span><small>Logic</small></button>
+        <button class="nav-btn play" id="play-btn"><span>▶</span><small>Play</small></button>
+      </nav>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
