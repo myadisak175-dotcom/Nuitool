@@ -6,7 +6,15 @@
     <meta name="theme-color" content="#0b1020" />
     <meta name="description" content="Nuitool — touch-first mobile game creator" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="/src/enhancements.css" />
+    <link rel="stylesheet" href="./src/styles.css" />
+    <link rel="stylesheet" href="./src/enhancements.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "playcanvas": "https://cdn.jsdelivr.net/npm/playcanvas@2.21.4/build/playcanvas.mjs"
+        }
+      }
+    </script>
     <title>Nuitool</title>
   </head>
   <body>
@@ -51,7 +59,7 @@
       </nav>
     </div>
 
-    <script type="module" src="/src/main.js"></script>
-    <script type="module" src="/src/enhancements.js"></script>
+    <script type="module" src="./src/main.js"></script>
+    <script type="module" src="./src/enhancements.js"></script>
   </body>
 </html>
