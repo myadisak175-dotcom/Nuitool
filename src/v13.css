@@ -1,0 +1,75 @@
+.project-doctor-hero {
+  display: grid;
+  grid-template-columns: 34px 1fr 34px;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 12px;
+  border-radius: 15px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.045);
+}
+.project-doctor-hero > span { font-size: 25px; }
+.project-doctor-hero strong,
+.project-doctor-hero small { display: block; }
+.project-doctor-hero strong { font-size: 13px; }
+.project-doctor-hero small { margin-top: 3px; font-size: 9px; opacity: .52; }
+.project-doctor-hero button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 11px;
+  background: rgba(255,255,255,.07);
+}
+.project-doctor-hero.good { background: rgba(110,231,197,.07); }
+.project-doctor-hero.warn { background: rgba(255,207,112,.07); }
+.project-doctor-hero.bad { background: rgba(255,122,144,.08); }
+
+.project-doctor-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin: 8px 0 10px;
+}
+.project-doctor-metrics > div {
+  min-width: 0;
+  padding: 8px 6px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.04);
+  text-align: center;
+}
+.project-doctor-metrics small,
+.project-doctor-metrics strong { display: block; }
+.project-doctor-metrics small { font-size: 8px; opacity: .45; }
+.project-doctor-metrics strong { margin-top: 4px; font-size: 10px; overflow-wrap: anywhere; }
+.project-doctor-issues { display: grid; gap: 7px; }
+.project-doctor-issue {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 7px;
+  padding: 9px 10px;
+  border-radius: 13px;
+  background: rgba(255,255,255,.04);
+}
+.project-doctor-issue > span {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  background: rgba(255,255,255,.08);
+}
+.project-doctor-issue strong,
+.project-doctor-issue small { display: block; }
+.project-doctor-issue strong { font-size: 10px; }
+.project-doctor-issue small { margin-top: 3px; font-size: 9px; line-height: 1.45; opacity: .55; }
+.project-doctor-issue.warn { background: rgba(255,207,112,.06); }
+.project-doctor-issue.bad { background: rgba(255,122,144,.07); }
+.project-doctor-issue.bad > span { background: rgba(255,122,144,.18); color: #ffd5de; }
+.project-doctor-empty {
+  padding: 10px 11px;
+  border-radius: 13px;
+  background: rgba(110,231,197,.07);
+  font-size: 10px;
+  color: rgba(255,255,255,.76);
+}
