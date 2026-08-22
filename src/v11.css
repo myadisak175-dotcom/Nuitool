@@ -75,10 +75,11 @@
   border: 0;
   border-radius: 11px;
   padding: 8px 10px;
-  background: rgba(255,122,144,.12);
-  color: #ffdfe5;
+  background: rgba(255,255,255,.08);
+  color: #f7f8ff;
   font-size: 10px;
 }
+.local-asset-row button.delete { background: rgba(255,122,144,.12); color: #ffdfe5; }
 .local-asset-row button:disabled { opacity: .35; }
 .local-assets-note {
   margin: 10px 1px 13px;
@@ -89,6 +90,72 @@
   font-size: 10px;
   line-height: 1.5;
 }
+
+.local-asset-main { min-width: 0; flex: 1; }
+.local-asset-actions { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
+.doctor-row { align-items: stretch; }
+.doctor-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 7px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  background: rgba(255,255,255,.07);
+}
+.doctor-badge.ready { background: rgba(110,231,197,.12); color: #bff5e5; }
+.doctor-badge.check { background: rgba(255,207,112,.12); color: #ffe5a9; }
+.doctor-badge.heavy { background: rgba(255,122,144,.12); color: #ffd5de; }
+
+.doctor-card { max-height: min(82vh, 720px); }
+.doctor-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  border-radius: 17px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.045);
+}
+.doctor-hero > span { font-size: 30px; }
+.doctor-hero strong,
+.doctor-hero small { display: block; }
+.doctor-hero strong { font-size: 16px; }
+.doctor-hero small { margin-top: 4px; font-size: 10px; opacity: .56; }
+.doctor-hero.ready { background: rgba(110,231,197,.08); }
+.doctor-hero.check { background: rgba(255,207,112,.08); }
+.doctor-hero.heavy { background: rgba(255,122,144,.08); }
+
+.doctor-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-top: 10px;
+}
+.doctor-metrics > div {
+  min-width: 0;
+  padding: 9px 7px;
+  border-radius: 13px;
+  background: rgba(255,255,255,.045);
+  text-align: center;
+}
+.doctor-metrics small,
+.doctor-metrics strong { display: block; }
+.doctor-metrics small { font-size: 8px; opacity: .48; }
+.doctor-metrics strong { margin-top: 4px; font-size: 11px; overflow-wrap: anywhere; }
+.doctor-list {
+  display: grid;
+  gap: 6px;
+  padding: 11px 12px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.04);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.doctor-list.tips { background: rgba(138,124,255,.08); }
+.doctor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 13px; }
 
 @media (min-width: 780px) {
   .local-assets-overlay { align-items: center; }
