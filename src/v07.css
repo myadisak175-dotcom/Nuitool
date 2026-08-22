@@ -1,0 +1,58 @@
+.runtime-snapshot-tools {
+  position: fixed;
+  z-index: 48;
+  right: 18px;
+  bottom: calc(88px + var(--safe-bottom));
+  width: min(220px, calc(100vw - 36px));
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 18px;
+  padding: 8px;
+  background: rgba(12,16,31,.72);
+  box-shadow: 0 14px 42px rgba(0,0,0,.24);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.snapshot-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.snapshot-buttons button {
+  min-height: 40px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 12px;
+  background: rgba(255,255,255,.065);
+  color: #fff;
+  font: inherit;
+  font-size: 10px;
+}
+
+.snapshot-buttons button:first-child {
+  background: rgba(138,124,255,.18);
+}
+
+.snapshot-buttons button:disabled {
+  opacity: .3;
+}
+
+.snapshot-status {
+  margin-top: 6px;
+  min-height: 18px;
+  padding: 3px 5px;
+  font-size: 9px;
+  text-align: center;
+  opacity: .55;
+}
+
+.snapshot-status[data-kind="good"] { opacity: .85; }
+.snapshot-status[data-kind="bad"] { color: #ffd0d8; opacity: .9; }
+
+@media (max-width: 430px) {
+  .runtime-snapshot-tools {
+    right: 14px;
+    bottom: calc(88px + var(--safe-bottom));
+    width: 178px;
+  }
+}
