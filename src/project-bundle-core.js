@@ -4,6 +4,8 @@ import { validateProject } from './project.js';
 export const BUNDLE_VERSION = 1;
 export const MAX_BUNDLE_ASSET_BYTES = 80 * 1024 * 1024;
 export const MAX_IMPORT_BYTES = 100 * 1024 * 1024;
+export const MAX_EXPANDED_BYTES = 90 * 1024 * 1024;
+export const MAX_SINGLE_ASSET_BYTES = 25 * 1024 * 1024;
 const IMPORT_PREFIX = 'user-model:';
 
 function safeName(value, fallback = 'asset.glb') {
@@ -40,6 +42,8 @@ export function createBundleArchive(projectInput, records = []) {
   for (const id of ids) {
     const record = byId.get(id);
     const bytes = record.bytes instanceof Uint8Array ? record.bytes : new Uint8Array(record.bytes);
+    if (!bytes.byteLength) throw new Error(`Local 3D asset ${id} is empty.`);
+    if (bytes.byteLength > MAX_SINGLE_ASSET_BYTES) throw new Error(`Local 3D asset ${id} exceeds the 25 MB per-asset limit.`);
     totalAssetBytes += bytes.byteLength;
     if (totalAssetBytes > MAX_BUNDLE_ASSET_BYTES) {
       throw new Error('Referenced local 3D assets exceed the 80 MB mobile bundle limit.');
@@ -86,29 +90,48 @@ export function readBundleArchive(input) {
   if (!bytes.byteLength) throw new Error('This Nuitool bundle is empty.');
   if (bytes.byteLength > MAX_IMPORT_BYTES) throw new Error('This Nuitool bundle is over the 100 MB mobile import limit.');
 
+  let expandedBytes = 0;
   let files;
   try {
-    files = unzipSync(bytes);
-  } catch {
-    throw new Error('Could not open this Nuitool bundle.');
+    files = unzipSync(bytes, {
+      filter(file) {
+        const name = String(file.name || '');
+        const allowed = name === 'manifest.json' || name === 'project.json' || /^assets\/[A-Za-z0-9%._~-]+\.glb$/i.test(name);
+        if (!allowed) return false;
+        const originalSize = Number(file.originalSize);
+        if (!Number.isFinite(originalSize) || originalSize < 0) throw new Error('Bundle contains a file with an unknown expanded size.');
+        if (name.startsWith('assets/') && originalSize > MAX_SINGLE_ASSET_BYTES) {
+          throw new Error('Bundle contains a GLB larger than the 25 MB per-asset limit.');
+        }
+        expandedBytes += originalSize;
+        if (expandedBytes > MAX_EXPANDED_BYTES) throw new Error('Bundle expands beyond the 90 MB mobile safety limit.');
+        return true;
+      }
+    });
+  } catch (error) {
+    throw new Error(error?.message || 'Could not open this Nuitool bundle.');
   }
 
   const manifest = parseJSONFile(files, 'manifest.json', 'manifest.json');
   if (manifest?.format !== 'nuitool-project-bundle' || manifest?.version !== BUNDLE_VERSION) {
     throw new Error('Unsupported Nuitool bundle format or version.');
   }
-  const projectPath = String(manifest.projectFile || 'project.json');
-  const projectInput = parseJSONFile(files, projectPath, projectPath);
+  if (manifest.projectFile !== 'project.json') throw new Error('Unsupported project path in Nuitool bundle.');
+  const projectInput = parseJSONFile(files, 'project.json', 'project.json');
   const validated = validateProject(projectInput);
   if (!validated.ok) throw new Error(`Project inside bundle is invalid: ${validated.error}`);
 
   const referencedIds = collectImportedAssetIds(validated.project);
   const manifestById = new Map((Array.isArray(manifest.assets) ? manifest.assets : []).map((asset) => [String(asset.id), asset]));
   const assets = [];
+  let totalAssetBytes = 0;
   for (const id of referencedIds) {
     const item = manifestById.get(id);
-    if (!item?.path || !files[item.path]) throw new Error(`Bundle is missing required 3D asset: ${id}`);
-    const assetBytes = files[item.path];
+    const expectedPath = `assets/${encodeURIComponent(id)}.glb`;
+    if (!item || item.path !== expectedPath || !files[expectedPath]) throw new Error(`Bundle is missing required 3D asset: ${id}`);
+    const assetBytes = files[expectedPath];
+    totalAssetBytes += assetBytes.byteLength;
+    if (totalAssetBytes > MAX_BUNDLE_ASSET_BYTES) throw new Error('Bundle contains more than 80 MB of referenced local 3D assets.');
     assets.push({
       id,
       name: String(item.name || item.filename || 'Imported Model').slice(0, 80),
