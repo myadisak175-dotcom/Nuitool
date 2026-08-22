@@ -38,6 +38,21 @@ function normalizeRule(raw, entityIds) {
   };
 }
 
+function ruleFromLegacyInteraction(entity) {
+  const legacy = entity.interaction;
+  if (!legacy?.type) return null;
+  const actionType = legacy.type === 'collect' ? 'collect' : 'message';
+  const whenType = actionType === 'collect' ? 'player_touch' : 'player_near';
+  return {
+    id: uid('rule'),
+    name: actionType === 'collect' ? `Collect ${entity.name}` : `${entity.name} interaction`,
+    enabled: true,
+    targetId: entity.id,
+    when: { type: whenType, distance: whenType === 'player_touch' ? 1.25 : 2.35 },
+    action: { type: actionType, text: String(legacy.text || (actionType === 'collect' ? 'Collected!' : 'Hello!')).slice(0, 240) }
+  };
+}
+
 export function validateProject(input) {
   if (!input || typeof input !== 'object') return { ok: false, error: 'Project must be an object.' };
   if (input.schemaVersion !== 1) return { ok: false, error: 'Unsupported Project Schema version.' };
@@ -79,10 +94,7 @@ export function validateProject(input) {
       scale: Math.min(8, Math.max(0.1, finiteNumber(raw.scale, 1))),
       behavior: String(raw.behavior || (type === 'player' ? 'player' : 'stay')),
       interaction: raw.interaction && typeof raw.interaction === 'object'
-        ? {
-            type: String(raw.interaction.type || ''),
-            text: String(raw.interaction.text || '').slice(0, 240)
-          }
+        ? { type: String(raw.interaction.type || ''), text: String(raw.interaction.text || '').slice(0, 240) }
         : null
     });
   }
@@ -102,6 +114,18 @@ export function validateProject(input) {
     if (ruleIds.has(rule.id)) rule.id = uid('rule');
     ruleIds.add(rule.id);
     normalized.rules.push(rule);
+  }
+
+  // Compatibility bridge: older Nuitool projects stored simple interactions on entities.
+  // Convert those interactions into the rule system once, while preserving Schema v1.
+  for (const entity of normalized.entities) {
+    const migrated = ruleFromLegacyInteraction(entity);
+    if (!migrated) continue;
+    const alreadyCovered = normalized.rules.some((rule) =>
+      rule.targetId === entity.id && rule.action.type === migrated.action.type
+    );
+    if (!alreadyCovered && normalized.rules.length < 250) normalized.rules.push(migrated);
+    entity.interaction = null;
   }
 
   return { ok: true, project: normalized };
@@ -216,9 +240,24 @@ export class ProjectStore {
     const entity = {
       id: uid(type), type, name: name || type, position: [...position], rotationY: 0, scale: 1,
       behavior: type === 'npc' || type === 'slime' ? 'stay' : type === 'coin' ? 'spin' : 'stay',
-      interaction: type === 'npc' ? { type: 'talk', text: 'สวัสดี!' } : type === 'coin' ? { type: 'collect', text: 'เก็บแล้ว!' } : null
+      interaction: null
     };
     this.project.entities.push(entity);
+
+    if (type === 'npc') {
+      this.project.rules.push({
+        id: uid('rule'), name: `${entity.name} says hello`, enabled: true, targetId: entity.id,
+        when: { type: 'player_near', distance: 2.35 },
+        action: { type: 'message', text: 'สวัสดี!' }
+      });
+    } else if (type === 'coin') {
+      this.project.rules.push({
+        id: uid('rule'), name: `Collect ${entity.name}`, enabled: true, targetId: entity.id,
+        when: { type: 'player_touch', distance: 1.25 },
+        action: { type: 'collect', text: 'เก็บแล้ว!' }
+      });
+    }
+
     this.notify('add');
     return entity;
   }
