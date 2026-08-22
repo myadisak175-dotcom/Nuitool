@@ -28,6 +28,7 @@ let fps = 60;
 let fpsAccumulator = 0;
 let fpsFrames = 0;
 let healthTimer = 0;
+const ruleRuntime = new Map();
 
 const app = new pc.Application(canvas, {
   mouse: new pc.Mouse(canvas),
@@ -185,6 +186,15 @@ function iconFor(type) {
   return ASSET_CATALOG.find((asset) => asset.type === type)?.icon || '◆';
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 function updateSelectionMarker() {
   if (playMode || !selectedId || selectedId === 'player') {
     selectionMarker.enabled = false;
@@ -202,6 +212,7 @@ function updateSelectionMarker() {
   const size = Math.max(0.8, descriptor.scale || 1);
   selectionMarker.setLocalScale(2.2 * size, 0.035, 2.2 * size);
   selectionPill.textContent = `${iconFor(descriptor.type)} ${descriptor.name}`;
+  selectionPill.dataset.entityId = descriptor.id;
   selectionPill.classList.remove('hidden');
 }
 
@@ -315,29 +326,85 @@ function beginMoveSelected() {
   showToast('ลากบนพื้นเพื่อย้ายของ');
 }
 
+function ruleWhenLabel(type) {
+  return type === 'player_touch' ? 'Player touches' : 'Player approaches';
+}
+
+function ruleActionLabel(type) {
+  return type === 'collect' ? 'Collect object' : 'Show message';
+}
+
+function renderRuleEditor(entity) {
+  const rules = store.getRulesForEntity(entity.id);
+  return `
+    <div class="section-title">Logic · WHEN → DO</div>
+    ${rules.length ? `<div class="rule-list">${rules.map((rule) => `
+      <div class="rule-card ${rule.enabled ? '' : 'disabled'}">
+        <div class="rule-top"><strong>${escapeHtml(rule.name)}</strong><button data-rule-toggle="${rule.id}">${rule.enabled ? 'ON' : 'OFF'}</button></div>
+        <div class="logic-line"><div class="logic-key">WHEN</div><div class="logic-value">${ruleWhenLabel(rule.when.type)}</div></div>
+        <div class="logic-line"><div class="logic-key">DO</div><div class="logic-value">${ruleActionLabel(rule.action.type)}</div></div>
+        <div class="rule-edit-row"><input data-rule-edit="${rule.id}" value="${escapeHtml(rule.action.text)}" maxlength="240"><button data-rule-save="${rule.id}">Save</button><button data-rule-delete="${rule.id}">×</button></div>
+      </div>`).join('')}</div>` : '<div class="empty-rule">ยังไม่มีกฎสำหรับ Object นี้</div>'}
+    <div class="rule-composer">
+      <div class="rule-field"><label>WHEN</label><select data-rule-when><option value="player_near">Player approaches</option><option value="player_touch">Player touches</option></select></div>
+      <div class="rule-field"><label>DO</label><select data-rule-action><option value="message">Show message</option><option value="collect">Collect object</option></select></div>
+      <input data-rule-new-text maxlength="240" placeholder="ข้อความ เช่น พบหีบสมบัติ!">
+      <button class="wide-btn accent" data-add-rule>＋ Add rule</button>
+    </div>`;
+}
+
+function bindRuleEditor(entity) {
+  panel.querySelector('[data-add-rule]')?.addEventListener('click', () => {
+    const whenType = panel.querySelector('[data-rule-when]')?.value || 'player_near';
+    const actionType = panel.querySelector('[data-rule-action]')?.value || 'message';
+    const input = panel.querySelector('[data-rule-new-text]');
+    const text = input?.value.trim() || (actionType === 'collect' ? `เก็บ ${entity.name} แล้ว` : `พบ ${entity.name}`);
+    store.addRule(entity.id, { whenType, actionType, text, name: `${ruleWhenLabel(whenType)} → ${ruleActionLabel(actionType)}` });
+    showToast('เพิ่ม Logic แล้ว ⚡');
+  });
+
+  panel.querySelectorAll('[data-rule-toggle]').forEach((button) => button.addEventListener('click', () => {
+    const rule = store.project.rules.find((item) => item.id === button.dataset.ruleToggle);
+    if (rule) store.updateRule(rule.id, { enabled: !rule.enabled });
+  }));
+
+  panel.querySelectorAll('[data-rule-save]').forEach((button) => button.addEventListener('click', () => {
+    const id = button.dataset.ruleSave;
+    const input = panel.querySelector(`[data-rule-edit="${id}"]`);
+    store.updateRule(id, { text: input?.value || '' });
+    showToast('บันทึก Logic แล้ว ✓');
+  }));
+
+  panel.querySelectorAll('[data-rule-delete]').forEach((button) => button.addEventListener('click', () => {
+    if (store.removeRule(button.dataset.ruleDelete)) showToast('ลบ Logic แล้ว');
+  }));
+}
+
 function renderLogicPanel() {
   const entity = selectedId ? store.getEntity(selectedId) : null;
   if (!entity || entity.id === 'player') {
     panel.innerHTML = `${panelHeader('Logic', 'แตะ Object หรือ Character ในโลกก่อน')}
-      <div class="logic-card"><div class="logic-line"><div class="logic-key">WHEN</div><div class="logic-value">Player approaches Mia</div></div><div class="logic-line"><div class="logic-key">DO</div><div class="logic-value">Talk</div></div></div>
-      <p style="opacity:.58;font-size:12px;line-height:1.55;margin:12px 2px 0">ตอนนี้ใช้ Behavior ง่าย ๆ ก่อน ระบบ WHEN → IF → DO เต็มรูปแบบจะต่อจาก Project Schema เดียวกัน</p>`;
+      <div class="logic-card"><div class="logic-line"><div class="logic-key">WHEN</div><div class="logic-value">Player approaches Mia</div></div><div class="logic-line"><div class="logic-key">DO</div><div class="logic-value">Show message</div></div></div>
+      <p style="opacity:.58;font-size:12px;line-height:1.55;margin:12px 2px 0">เลือกของในโลก แล้วสร้างกฎด้วย WHEN → DO โดยไม่ต้องเขียนโค้ด</p>`;
     bindClose();
     return;
   }
 
   const character = entity.type === 'npc' || entity.type === 'slime';
   const talk = entity.interaction?.type === 'talk';
-  panel.innerHTML = `${panelHeader(`${iconFor(entity.type)} ${entity.name}`, 'แก้จากคำสั่งง่าย ๆ บนมือถือ')}
+  panel.innerHTML = `${panelHeader(`${iconFor(entity.type)} ${escapeHtml(entity.name)}`, 'แก้ Object และ Logic จากหน้าจอเดียว')}
     <div class="quick-edit-row"><button class="wide-btn accent" data-move-ground>✋ Move on ground</button><button class="wide-btn" data-focus-selected>◎ Focus</button></div>
     <div class="section-title">Fine tune</div>
     <div class="toolbar-row"><button data-move="left">←</button><button data-move="up">↑</button><button data-move="down">↓</button><button data-move="right">→</button></div>
     <div class="property-row"><div><label>Rotation</label><small>${Math.round(entity.rotationY || 0)}°</small></div><div class="segmented"><button data-rotate="-15">−15°</button><button data-rotate="15">+15°</button></div></div>
     <div class="property-row"><div><label>Size</label><small>${Number(entity.scale || 1).toFixed(2)}×</small></div><div class="segmented"><button data-scale="0.9">−</button><button data-scale="1.1">＋</button></div></div>
     ${character ? `<div class="section-title">Movement</div><div class="choice-grid"><button class="choice ${entity.behavior === 'stay' ? 'active' : ''}" data-behavior="stay"><span>📍</span><strong>Stay</strong></button><button class="choice ${entity.behavior === 'wander' ? 'active' : ''}" data-behavior="wander"><span>🚶</span><strong>Walk around</strong></button><button class="choice ${entity.behavior === 'follow' ? 'active' : ''}" data-behavior="follow"><span>🧲</span><strong>Follow</strong></button></div>` : ''}
-    ${entity.type === 'npc' ? `<div class="section-title">Interaction</div><div class="property-row"><div><label>Talk when near</label><small>${talk ? entity.interaction.text : 'ปิดอยู่'}</small></div><div class="segmented"><button data-talk="on" class="${talk ? 'active' : ''}">ON</button><button data-talk="off" class="${!talk ? 'active' : ''}">OFF</button></div></div>` : ''}
+    ${entity.type === 'npc' && talk ? `<div class="section-title">Legacy interaction</div><div class="property-row"><div><label>Talk when near</label><small>${escapeHtml(entity.interaction.text)}</small></div><div class="segmented"><button data-talk="off">Convert off</button></div></div>` : ''}
+    ${renderRuleEditor(entity)}
     <div class="section-title">Object</div>
     <div class="object-actions"><button class="wide-btn" data-duplicate>⧉ Copy</button><button class="wide-btn danger" data-delete>Delete</button></div>`;
   bindClose();
+  bindRuleEditor(entity);
   panel.querySelector('[data-move-ground]')?.addEventListener('click', beginMoveSelected);
   panel.querySelector('[data-focus-selected]')?.addEventListener('click', focusSelected);
   panel.querySelectorAll('[data-move]').forEach((button) => button.addEventListener('click', () => {
@@ -360,15 +427,13 @@ function renderLogicPanel() {
     store.updateEntity(entity.id, { scale: Number(next.toFixed(2)) });
   }));
   panel.querySelectorAll('[data-behavior]').forEach((button) => button.addEventListener('click', () => store.updateEntity(entity.id, { behavior: button.dataset.behavior })));
-  panel.querySelectorAll('[data-talk]').forEach((button) => button.addEventListener('click', () => {
-    store.updateEntity(entity.id, { interaction: button.dataset.talk === 'on' ? { type: 'talk', text: entity.interaction?.text || 'สวัสดี!' } : null });
-  }));
+  panel.querySelector('[data-talk="off"]')?.addEventListener('click', () => store.updateEntity(entity.id, { interaction: null }));
   panel.querySelector('[data-duplicate]')?.addEventListener('click', () => {
     const copy = store.duplicateEntity(entity.id);
-    if (copy) { selectedId = copy.id; updateSelectionMarker(); renderLogicPanel(); showToast('คัดลอกแล้ว'); }
+    if (copy) { selectedId = copy.id; updateSelectionMarker(); renderLogicPanel(); showToast('คัดลอก Object + Logic แล้ว'); }
   });
   panel.querySelector('[data-delete]')?.addEventListener('click', () => {
-    if (store.removeEntity(entity.id)) { selectedId = null; closePanel(); updateSelectionMarker(); showToast('ลบแล้ว'); }
+    if (store.removeEntity(entity.id)) { selectedId = null; closePanel(); updateSelectionMarker(); showToast('ลบ Object และ Logic แล้ว'); }
   });
 }
 
@@ -376,14 +441,14 @@ function openProjectMenu() {
   if (playMode) return;
   activePanel = 'menu';
   panel.classList.remove('hidden');
-  const safeName = store.project.meta.name.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-  panel.innerHTML = `${panelHeader('Project', `${store.project.entities.length} objects • autosaved on this device`)}
+  const safeName = escapeHtml(store.project.meta.name);
+  panel.innerHTML = `${panelHeader('Project', `${store.project.entities.length} objects • ${(store.project.rules || []).length} rules • autosaved`)}
     <div class="section-title">Game name</div>
     <div class="rename-row"><input data-project-name value="${safeName}" maxlength="80" aria-label="Game name"><button data-save-name>Save</button></div>
     <div class="menu-sheet project-actions">
       <button data-export>⇩ Export project JSON</button>
       <button data-reset>↺ Reset starter world</button>
-      <button data-about>ⓘ About Nuitool v0.4</button>
+      <button data-about>ⓘ About Nuitool v0.5</button>
     </div>`;
   bindClose();
   const saveName = () => {
@@ -398,7 +463,9 @@ function openProjectMenu() {
     const blob = new Blob([store.exportJSON()], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `${store.project.meta.name.replace(/[^a-z0-9-_]+/gi, '-').toLowerCase() || 'nuitool-project'}.json`; a.click();
+    a.href = url;
+    a.download = `${store.project.meta.name.replace(/[^a-z0-9-_]+/gi, '-').toLowerCase() || 'nuitool-project'}.json`;
+    a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     showToast('Exported project JSON');
   });
@@ -406,7 +473,7 @@ function openProjectMenu() {
     if (!confirm('Reset starter world? งานปัจจุบันจะถูกแทนที่ แต่ Undo ยังใช้ได้')) return;
     store.reset(); selectedId = null; closePanel(); showToast('Starter world restored');
   });
-  panel.querySelector('[data-about]')?.addEventListener('click', () => showToast('Nuitool v0.4 • Touch-first game creator'));
+  panel.querySelector('[data-about]')?.addEventListener('click', () => showToast('Nuitool v0.5 • WHEN → DO is live'));
 }
 
 function screenToGround(clientX, clientY) {
@@ -492,12 +559,10 @@ canvas.addEventListener('pointermove', (event) => {
   const dx = event.clientX - pointerStart.x;
   const dy = event.clientY - pointerStart.y;
   if (Math.hypot(dx, dy) > 7) gestureMoved = true;
-
   if (activePlacement || moveSelectedMode) {
     lastGroundPreview = previewGroundPoint(event.clientX, event.clientY);
     return;
   }
-
   if (gestureMoved) {
     orbitYaw = pointerStart.yaw - dx * .22;
     orbitPitch = pc.math.clamp(pointerStart.pitch + dy * .18, 18, 70);
@@ -539,9 +604,7 @@ canvas.addEventListener('pointerup', (event) => {
       activePanel = 'logic';
       panel.classList.remove('hidden');
       renderLogicPanel();
-    } else {
-      updateSelectionMarker();
-    }
+    } else updateSelectionMarker();
     pointerStart = null;
     lastGroundPreview = null;
     return;
@@ -555,9 +618,7 @@ canvas.addEventListener('pointerup', (event) => {
       activePanel = 'logic';
       panel.classList.remove('hidden');
       renderLogicPanel();
-    } else {
-      closePanel();
-    }
+    } else closePanel();
   }
   pointerStart = null;
 });
@@ -616,6 +677,10 @@ function releaseJoystick(event) {
 joystick.addEventListener('pointerup', releaseJoystick);
 joystick.addEventListener('pointercancel', releaseJoystick);
 
+function resetRuleRuntime() {
+  ruleRuntime.clear();
+}
+
 function enterPlayMode() {
   if (playMode) return;
   playMode = true;
@@ -633,6 +698,7 @@ function enterPlayMode() {
   editModeBtn.classList.remove('hidden');
   modeLabel.textContent = 'Play mode';
   lastInteractionKey = '';
+  resetRuleRuntime();
   const player = entityViews.get('player');
   if (player) {
     orbitTarget.copy(player.getPosition()).add(new pc.Vec3(0, 1, 0));
@@ -654,6 +720,7 @@ function exitPlayMode() {
   orbitDistance = 18;
   orbitPitch = 34;
   orbitTarget.set(0, .7, 0);
+  resetRuleRuntime();
   syncScene();
   updateCamera();
   showToast('กลับสู่ Edit mode');
@@ -680,8 +747,7 @@ function updatePlayer(dt) {
       pos.x = pc.math.clamp(pos.x, -38, 38);
       pos.z = pc.math.clamp(pos.z, -38, 38);
       player.setPosition(pos);
-      const angle = Math.atan2(move.x, move.z) * pc.math.RAD_TO_DEG;
-      player.setEulerAngles(0, angle, 0);
+      player.setEulerAngles(0, Math.atan2(move.x, move.z) * pc.math.RAD_TO_DEG, 0);
     }
   }
   const target = player.getPosition().clone().add(new pc.Vec3(0, 1.0, 0));
@@ -737,7 +803,11 @@ function updateBehaviors(dt) {
   }
 }
 
-function updateInteractions() {
+function hasEnabledRule(entityId) {
+  return (store.project.rules || []).some((rule) => rule.enabled && rule.targetId === entityId);
+}
+
+function updateLegacyInteractions() {
   if (!playMode) return;
   const player = entityViews.get('player');
   if (!player) return;
@@ -745,11 +815,12 @@ function updateInteractions() {
   let nearby = null;
   let nearest = 2.25;
   for (const descriptor of store.project.entities) {
-    if (!descriptor.interaction) continue;
+    if (!descriptor.interaction || hasEnabledRule(descriptor.id)) continue;
     const view = entityViews.get(descriptor.id);
     if (!view || !view.enabled) continue;
+    const threshold = descriptor.interaction.type === 'collect' ? 1.25 : 2.25;
     const distance = playerPos.distance(view.getPosition());
-    if (distance < nearest) { nearby = { descriptor, view }; nearest = distance; }
+    if (distance < threshold && distance < nearest) { nearby = { descriptor, view }; nearest = distance; }
   }
   if (!nearby) { lastInteractionKey = ''; return; }
   const { descriptor, view } = nearby;
@@ -760,6 +831,44 @@ function updateInteractions() {
   if (descriptor.interaction.type === 'collect') {
     view.enabled = false;
     showToast(descriptor.interaction.text || 'Collected!', 1800);
+  }
+}
+
+function executeRule(rule, targetView) {
+  if (rule.action.type === 'message') {
+    const target = store.getEntity(rule.targetId);
+    showToast(`${target?.name || 'Object'}: ${rule.action.text}`, 2600);
+    return;
+  }
+  if (rule.action.type === 'collect') {
+    targetView.enabled = false;
+    showToast(rule.action.text || 'Collected!', 1900);
+  }
+}
+
+function updateRules() {
+  if (!playMode) return;
+  const player = entityViews.get('player');
+  if (!player) return;
+  const playerPos = player.getPosition();
+
+  for (const rule of store.project.rules || []) {
+    if (!rule.enabled) continue;
+    const targetView = entityViews.get(rule.targetId);
+    if (!targetView) continue;
+    let state = ruleRuntime.get(rule.id);
+    if (!state) {
+      state = { inside: false, consumed: false };
+      ruleRuntime.set(rule.id, state);
+    }
+    if (state.consumed) continue;
+    const distance = playerPos.distance(targetView.getPosition());
+    const inside = distance <= rule.when.distance;
+    if (inside && !state.inside) {
+      executeRule(rule, targetView);
+      if (rule.action.type === 'collect') state.consumed = true;
+    }
+    state.inside = inside;
   }
 }
 
@@ -775,11 +884,12 @@ function updateHealth(dt) {
   if (healthTimer < 1) return;
   healthTimer = 0;
   const objects = store.project.entities.length;
+  const rules = (store.project.rules || []).length;
   let level = 'good';
   if (fps < 36 || objects > 180) level = 'warn';
   if (fps < 24 || objects > 350) level = 'bad';
   healthPill.textContent = level === 'good'
-    ? `🟢 Game Health: Good · ${objects} objects`
+    ? `🟢 Game Health: Good · ${objects} objects · ${rules} rules`
     : level === 'warn'
       ? `🟠 Game Health: Check · ${fps} FPS`
       : `🔴 Game Health: Heavy · ${fps} FPS`;
@@ -789,16 +899,21 @@ app.on('update', (dt) => {
   if (playMode) {
     updatePlayer(dt);
     updateBehaviors(dt);
-    updateInteractions();
+    updateRules();
+    updateLegacyInteractions();
   }
   updateHealth(dt);
 });
 
 window.Nuitool = Object.freeze({
-  version: '0.4.0',
-  getProject: () => JSON.parse(store.exportJSON())
+  version: '0.5.0',
+  getProject: () => JSON.parse(store.exportJSON()),
+  addRule: (targetId, config) => store.addRule(targetId, config),
+  updateRule: (id, patch) => store.updateRule(id, patch),
+  removeRule: (id) => store.removeRule(id),
+  isPlayMode: () => playMode
 });
 
 window.addEventListener('resize', () => app.resizeCanvas());
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
-showToast('Nuitool v0.4 • Add ของ แล้วลากไปวางได้เลย', 2500);
+showToast('Nuitool v0.5 • Logic WHEN → DO ใช้งานได้แล้ว', 2600);
