@@ -1,0 +1,76 @@
+.playtest-score {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 17px;
+  background: rgba(255,255,255,.04);
+}
+
+.playtest-score > span { font-size: 28px; }
+.playtest-score strong,
+.playtest-score small { display: block; }
+.playtest-score strong { font-size: 13px; }
+.playtest-score small { margin-top: 3px; font-size: 10px; opacity: .5; line-height: 1.4; }
+
+.playtest-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.playtest-metrics > div {
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 14px;
+  background: rgba(255,255,255,.035);
+  padding: 10px;
+}
+
+.playtest-metrics small,
+.playtest-metrics strong { display: block; }
+.playtest-metrics small { font-size: 9px; opacity: .45; text-transform: uppercase; letter-spacing: .06em; }
+.playtest-metrics strong { margin-top: 4px; font-size: 13px; }
+
+.playtest-timeline {
+  display: grid;
+  gap: 5px;
+}
+
+.playtest-event {
+  display: grid;
+  grid-template-columns: 58px 64px minmax(0,1fr);
+  gap: 7px;
+  align-items: center;
+  padding: 8px 2px;
+  border-bottom: 1px solid rgba(255,255,255,.055);
+  font-size: 10px;
+}
+
+.playtest-event time { opacity: .42; }
+.playtest-event-type {
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: rgba(138,124,255,.12);
+  text-align: center;
+  font-size: 8px;
+  text-transform: uppercase;
+  opacity: .8;
+}
+.playtest-event strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.playtest-empty {
+  border: 1px dashed rgba(255,255,255,.08);
+  border-radius: 14px;
+  padding: 12px;
+  font-size: 10px;
+  text-align: center;
+  opacity: .45;
+}
