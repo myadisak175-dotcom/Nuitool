@@ -1,5 +1,6 @@
 import * as pc from 'playcanvas';
 import { ASSET_CATALOG } from './assets.js';
+import { doctorSummary, inspectGlb } from './asset-doctor.js';
 
 const DB_NAME = 'nuitool-assets';
 const DB_VERSION = 1;
@@ -75,7 +76,7 @@ function catalogEntry(record) {
     icon: '🧩',
     name: record.name,
     category: 'My 3D',
-    subtitle: `${prettySize(record.size)} · local`
+    subtitle: `${prettySize(record.size)} · ${doctorSummary(record.doctor)}`
   };
 }
 
@@ -106,10 +107,11 @@ export async function initializeImportedAssets() {
 export async function importGlbFile(file) {
   if (!(file instanceof Blob)) throw new Error('Choose a GLB file first.');
   const filename = String(file.name || 'model.glb');
-  if (!filename.toLowerCase().endsWith('.glb')) throw new Error('Nuitool v0.11 accepts .glb files only.');
+  if (!filename.toLowerCase().endsWith('.glb')) throw new Error('Nuitool accepts .glb files only for now.');
   if (!file.size) throw new Error('This GLB file is empty.');
   if (file.size > MAX_GLB_BYTES) throw new Error('This GLB is over 25 MB. Optimize it before importing.');
 
+  const doctor = await inspectGlb(file);
   const id = globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   const record = {
     id,
@@ -118,6 +120,7 @@ export async function importGlbFile(file) {
     size: file.size,
     mime: file.type || 'model/gltf-binary',
     createdAt: new Date().toISOString(),
+    doctor,
     blob: file
   };
   await transact('readwrite', (store) => store.put(record));
@@ -131,6 +134,16 @@ export async function getImportedModel(id) {
   } catch {
     return null;
   }
+}
+
+export async function checkImportedModel(id) {
+  const record = await getImportedModel(id);
+  if (!record?.blob) throw new Error('Local GLB file is missing.');
+  record.doctor = await inspectGlb(record.blob);
+  record.checkedAt = new Date().toISOString();
+  await transact('readwrite', (store) => store.put(record));
+  registerRecord(record);
+  return record;
 }
 
 export async function deleteImportedModel(id) {
