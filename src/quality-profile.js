@@ -1,7 +1,7 @@
 export const QUALITY_PRESETS = Object.freeze({
   eco: Object.freeze({ id: 'eco', label: 'Eco', maxPixelRatio: 1, shadows: false, shadowResolution: 512, shadowDistance: 18 }),
   balanced: Object.freeze({ id: 'balanced', label: 'Balanced', maxPixelRatio: 1.5, shadows: true, shadowResolution: 1024, shadowDistance: 30 }),
-  high: Object.freeze({ id: 'high', label: 'High', maxPixelRatio: 2, shadows: true, shadowResolution: 1536, shadowDistance: 42 })
+  high: Object.freeze({ id: 'high', label: 'High', maxPixelRatio: 2, shadows: true, shadowResolution: 2048, shadowDistance: 42 })
 });
 
 function finite(value, fallback = 0) {
@@ -40,8 +40,8 @@ export function downgradeQuality(current) {
 
 export function calibrateAutoQuality(initial, averageFps) {
   const fps = finite(averageFps, 60);
-  if (initial === 'high' && fps < 48) return 'balanced';
   if ((initial === 'balanced' || initial === 'high') && fps < 34) return 'eco';
+  if (initial === 'high' && fps < 48) return 'balanced';
   return initial;
 }
 
