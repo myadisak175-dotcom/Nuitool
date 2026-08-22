@@ -1,4 +1,5 @@
 import { validateProject } from './project.js';
+import { GAME_TEMPLATES } from './templates.js';
 
 const STORAGE_KEY = 'nuitool.project.v0.1';
 const SNAPSHOT_KEY = 'nuitool.project.snapshot.latest';
@@ -33,6 +34,47 @@ function downloadJSON(name, value) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function saveTemplate(template) {
+  const next = template.make();
+  const result = validateProject(next);
+  if (!result.ok) return toast(`Template error: ${result.error}`, 3000);
+  const current = readProject();
+  if (current) localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ savedAt: new Date().toISOString(), project: current }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(result.project));
+  toast(`${template.icon} ${template.name} พร้อมแล้ว`);
+  setTimeout(() => location.reload(), 420);
+}
+
+function openTemplatePicker() {
+  document.querySelector('#template-overlay')?.remove();
+  const overlay = document.createElement('section');
+  overlay.id = 'template-overlay';
+  overlay.className = 'template-overlay glass';
+  overlay.innerHTML = `
+    <div class="panel-head">
+      <div><h2>New Game</h2><p>เลือกจุดเริ่มต้น แล้วแก้ทุกอย่างต่อได้</p></div>
+      <button class="close-btn" data-template-close>×</button>
+    </div>
+    <div class="template-grid">
+      ${GAME_TEMPLATES.map((template) => `
+        <button class="template-card" data-template="${template.id}">
+          <span class="template-icon">${template.icon}</span>
+          <strong>${template.name}</strong>
+          <small>${template.subtitle}</small>
+          <div class="template-tags">${template.tags.map((tag) => `<em>${tag}</em>`).join('')}</div>
+        </button>
+      `).join('')}
+    </div>
+    <div class="template-note">ก่อนเปลี่ยน Template ระบบจะเก็บ Project ปัจจุบันเป็น Snapshot ให้อัตโนมัติ</div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.querySelector('[data-template-close]')?.addEventListener('click', () => overlay.remove());
+  overlay.querySelectorAll('[data-template]').forEach((button) => button.addEventListener('click', () => {
+    const template = GAME_TEMPLATES.find((item) => item.id === button.dataset.template);
+    if (template) saveTemplate(template);
+  }));
+}
+
 async function importProjectFile() {
   const input = document.createElement('input');
   input.type = 'file';
@@ -48,6 +90,8 @@ async function importProjectFile() {
         toast(`Import failed: ${result.error}`, 3000);
         return;
       }
+      const current = readProject();
+      if (current) localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ savedAt: new Date().toISOString(), project: current }));
       localStorage.setItem(STORAGE_KEY, JSON.stringify(result.project));
       toast('Imported project ✓');
       setTimeout(() => location.reload(), 450);
@@ -94,6 +138,8 @@ function openMonitor() {
   const deviceMemory = navigator.deviceMemory ? `${navigator.deviceMemory} GB class` : 'Unknown';
   const cores = navigator.hardwareConcurrency || 'Unknown';
   const top = assetCounts(project).slice(0, 5);
+  const characters = (project?.entities || []).filter((entity) => entity.type === 'npc' || entity.type === 'slime').length;
+  const interactables = (project?.entities || []).filter((entity) => entity.interaction).length;
   const status = count < 120 ? ['🟢', 'Healthy', 'Scene size is comfortable for this prototype.']
     : count < 240 ? ['🟠', 'Watch', 'Consider repeating assets efficiently and reducing heavy effects.']
       : ['🔴', 'Heavy', 'This scene is getting large for a mobile-first target.'];
@@ -109,6 +155,8 @@ function openMonitor() {
     <div class="monitor-score"><span>${status[0]}</span><div><strong>${status[1]}</strong><small>${status[2]}</small></div></div>
     <div class="monitor-grid">
       <div><small>Objects</small><strong>${count}</strong></div>
+      <div><small>Characters</small><strong>${characters}</strong></div>
+      <div><small>Interactions</small><strong>${interactables}</strong></div>
       <div><small>CPU threads</small><strong>${cores}</strong></div>
       <div><small>Device memory</small><strong>${deviceMemory}</strong></div>
       <div><small>Schema</small><strong>v${project?.schemaVersion || '?'}</strong></div>
@@ -130,6 +178,8 @@ function openMonitor() {
       generatedAt: new Date().toISOString(),
       project: project?.meta?.name || 'Untitled',
       objects: count,
+      characters,
+      interactables,
       topTypes: Object.fromEntries(top),
       device: { hardwareConcurrency: navigator.hardwareConcurrency || null, deviceMemory: navigator.deviceMemory || null }
     });
@@ -172,11 +222,17 @@ function enhanceProjectMenu() {
   const sheet = panel?.querySelector('.menu-sheet');
   if (!sheet || sheet.querySelector('[data-import-project]')) return;
 
+  const templateButton = document.createElement('button');
+  templateButton.dataset.newTemplate = 'true';
+  templateButton.textContent = '✦ New Game from Template';
+  templateButton.addEventListener('click', openTemplatePicker);
+  sheet.insertBefore(templateButton, sheet.firstChild || null);
+
   const importButton = document.createElement('button');
   importButton.dataset.importProject = 'true';
   importButton.textContent = '⇧ Import project JSON';
   importButton.addEventListener('click', importProjectFile);
-  sheet.insertBefore(importButton, sheet.firstChild?.nextSibling || null);
+  sheet.insertBefore(importButton, templateButton.nextSibling);
 
   const snapshotButton = document.createElement('button');
   snapshotButton.textContent = '📸 Save Project Snapshot';
