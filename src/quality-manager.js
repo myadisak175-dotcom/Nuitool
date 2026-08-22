@@ -4,6 +4,7 @@ import { calibrateAutoQuality, fallbackQualityFromSignals, qualityFromGpuResult,
 
 const STORAGE_KEY = 'nuitool.quality.mode.v1';
 const VALID_MODES = new Set(['auto', 'eco', 'balanced', 'high']);
+const panelElement = document.querySelector('#panel');
 const state = {
   mode: VALID_MODES.has(localStorage.getItem(STORAGE_KEY)) ? localStorage.getItem(STORAGE_KEY) : 'auto',
   applied: 'balanced',
@@ -96,6 +97,7 @@ function measureFps(durationMs = 2600) {
 async function calibrate() {
   if (state.mode !== 'auto' || state.calibrated) return;
   await new Promise((resolve) => setTimeout(resolve, 1800));
+  if (state.mode !== 'auto') return;
   const fps = await measureFps();
   if (!Number.isFinite(fps)) return;
   state.calibrationFps = Math.round(fps);
@@ -138,6 +140,15 @@ function labelForMode() {
   return state.mode === 'auto' ? `Auto · ${applied}` : applied;
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 function openQualityPanel() {
   document.querySelector('#quality-overlay')?.remove();
   const q = getState();
@@ -154,7 +165,7 @@ function openQualityPanel() {
         ${option('auto', '✨', 'Auto', 'GPU profile + live FPS calibration')}
         ${option('eco', '🌱', 'Eco', 'เบาสุด · 1× resolution · shadows off')}
         ${option('balanced', '⚖️', 'Balanced', 'ค่าเริ่มต้นที่สมดุลสำหรับมือถือ')}
-        ${option('high', '✨', 'High', 'ภาพคมและเงาละเอียดขึ้น')}
+        ${option('high', '💎', 'High', 'ภาพคมและเงาละเอียดขึ้น')}
       </div>
       <div class="quality-note">ตอนนี้ใช้ <strong>${labelForMode()}</strong>${q.calibrationFps ? ` · calibration ${q.calibrationFps} FPS` : ''}. Auto จะลดคุณภาพได้เองถ้า FPS จริงไม่ถึงเป้า แต่จะไม่เพิ่มเกิน GPU/device profile ที่ประเมินไว้</div>
     </div>`;
@@ -168,17 +179,8 @@ function openQualityPanel() {
   }));
 }
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
 function injectMenu() {
-  const menu = document.querySelector('#panel .menu-sheet');
+  const menu = panelElement?.querySelector('.menu-sheet');
   if (!menu || menu.querySelector('[data-quality-settings]')) return;
   const button = document.createElement('button');
   button.dataset.qualitySettings = 'true';
@@ -208,23 +210,24 @@ function injectMonitor() {
 }
 
 function refreshVisibleUi() {
-  const menuButton = document.querySelector('[data-quality-settings]');
+  const menuButton = panelElement?.querySelector('[data-quality-settings]');
   if (menuButton) menuButton.textContent = `🎛 Graphics: ${labelForMode()}`;
   injectMonitor();
 }
 
-const observer = new MutationObserver(() => {
-  injectMenu();
-  injectMonitor();
-});
-observer.observe(document.body, { childList: true, subtree: true });
+if (panelElement) {
+  const panelObserver = new MutationObserver(injectMenu);
+  panelObserver.observe(panelElement, { childList: true, subtree: true });
+}
+const bodyObserver = new MutationObserver(injectMonitor);
+bodyObserver.observe(document.body, { childList: true });
 
 window.NuitoolQuality = Object.freeze({ getState, setMode });
 
 (async () => {
   state.app = await waitForApp();
   if (!state.app) return;
-  applyQuality(fallbackQualityFromSignals(signals()), 'fallback');
+  applyQuality(qualityForMode(), 'initial');
   await detectGpu();
   if (state.mode === 'auto') calibrate();
 })();
