@@ -20,6 +20,7 @@ const store = new ProjectStore();
 let selectedId = null;
 let activePlacement = null;
 let activePanel = null;
+let moveSelectedMode = false;
 let playMode = false;
 let toastTimer = 0;
 let lastInteractionKey = '';
@@ -90,7 +91,12 @@ camera.addComponent('camera', {
 app.root.addChild(camera);
 
 const selectionMarker = createSelectionMarker();
+const placementMarker = createSelectionMarker();
+placementMarker.name = 'Placement Marker';
+selectionMarker.enabled = false;
+placementMarker.enabled = false;
 app.root.addChild(selectionMarker);
+app.root.addChild(placementMarker);
 
 const entityViews = new Map();
 const runtime = new Map();
@@ -130,24 +136,9 @@ const groundMaterials = {
 };
 
 const skies = {
-  day: {
-    clear: new pc.Color(0.64, 0.82, 0.96),
-    ambient: new pc.Color(0.65, 0.7, 0.75),
-    sun: new pc.Color(1, 0.95, 0.84),
-    intensity: 1.25
-  },
-  sunset: {
-    clear: new pc.Color(0.92, 0.59, 0.53),
-    ambient: new pc.Color(0.62, 0.48, 0.55),
-    sun: new pc.Color(1, 0.68, 0.46),
-    intensity: 1.1
-  },
-  night: {
-    clear: new pc.Color(0.06, 0.09, 0.18),
-    ambient: new pc.Color(0.18, 0.22, 0.36),
-    sun: new pc.Color(0.48, 0.58, 0.9),
-    intensity: 0.45
-  }
+  day: { clear: new pc.Color(0.64, 0.82, 0.96), ambient: new pc.Color(0.65, 0.7, 0.75), sun: new pc.Color(1, 0.95, 0.84), intensity: 1.25 },
+  sunset: { clear: new pc.Color(0.92, 0.59, 0.53), ambient: new pc.Color(0.62, 0.48, 0.55), sun: new pc.Color(1, 0.68, 0.46), intensity: 1.1 },
+  night: { clear: new pc.Color(0.06, 0.09, 0.18), ambient: new pc.Color(0.18, 0.22, 0.36), sun: new pc.Color(0.48, 0.58, 0.9), intensity: 0.45 }
 };
 
 function applyWorld() {
@@ -189,6 +180,11 @@ function syncScene() {
   updateSelectionMarker();
 }
 
+function iconFor(type) {
+  if (type === 'player') return '🎮';
+  return ASSET_CATALOG.find((asset) => asset.type === type)?.icon || '◆';
+}
+
 function updateSelectionMarker() {
   if (playMode || !selectedId || selectedId === 'player') {
     selectionMarker.enabled = false;
@@ -207,11 +203,6 @@ function updateSelectionMarker() {
   selectionMarker.setLocalScale(2.2 * size, 0.035, 2.2 * size);
   selectionPill.textContent = `${iconFor(descriptor.type)} ${descriptor.name}`;
   selectionPill.classList.remove('hidden');
-}
-
-function iconFor(type) {
-  if (type === 'player') return '🎮';
-  return ASSET_CATALOG.find((asset) => asset.type === type)?.icon || '◆';
 }
 
 store.subscribe(() => {
@@ -256,12 +247,8 @@ function bindClose() {
 
 function renderWorldPanel() {
   const { ground: groundType, sky } = store.project.world;
-  const grounds = [
-    ['meadow', '🌱', 'Meadow'], ['dirt', '🟫', 'Dirt'], ['sand', '🏖️', 'Sand'], ['stone', '🪨', 'Stone']
-  ];
-  const skyOptions = [
-    ['day', '☀️', 'Day'], ['sunset', '🌇', 'Sunset'], ['night', '🌙', 'Night']
-  ];
+  const grounds = [['meadow', '🌱', 'Meadow'], ['dirt', '🟫', 'Dirt'], ['sand', '🏖️', 'Sand'], ['stone', '🪨', 'Stone']];
+  const skyOptions = [['day', '☀️', 'Day'], ['sunset', '🌇', 'Sunset'], ['night', '🌙', 'Night']];
   panel.innerHTML = `${panelHeader('World', 'แตะเพื่อเปลี่ยนบรรยากาศของโลก')}
     <div class="section-title">Ground</div>
     <div class="choice-grid">${grounds.map(([id, icon, name]) => `<button class="choice ${groundType === id ? 'active' : ''}" data-ground="${id}"><span>${icon}</span><strong>${name}</strong></button>`).join('')}</div>
@@ -277,44 +264,82 @@ function renderWorldPanel() {
   });
 }
 
+function startPlacement(asset) {
+  moveSelectedMode = false;
+  activePlacement = asset;
+  placementMarker.enabled = true;
+  placementMarker.setPosition(orbitTarget.x, 0.04, orbitTarget.z);
+  placementMarker.setLocalScale(2.1, 0.035, 2.1);
+  placementHint.textContent = `${asset.icon} ลากหาตำแหน่ง แล้วปล่อยเพื่อวาง ${asset.name}`;
+  placementHint.classList.remove('hidden');
+  closePanel();
+  showToast(`กำลังวาง ${asset.name}`);
+}
+
+function cancelPlacement(message = 'ยกเลิกการวาง') {
+  activePlacement = null;
+  placementMarker.enabled = false;
+  placementHint.classList.add('hidden');
+  showToast(message);
+}
+
 function renderAddPanel() {
-  panel.innerHTML = `${panelHeader('Add', 'เลือกของ แล้วแตะพื้นเพื่อวาง')}
+  panel.innerHTML = `${panelHeader('Add', 'เลือกของ แล้วลากไปวางบนพื้น')}
     <div class="asset-grid">${ASSET_CATALOG.map((asset) => `<button class="asset-card" data-asset="${asset.type}"><span>${asset.icon}</span><strong>${asset.name}</strong><small>${asset.category}</small></button>`).join('')}</div>`;
   bindClose();
   panel.querySelectorAll('[data-asset]').forEach((button) => button.addEventListener('click', () => {
     const asset = ASSET_CATALOG.find((item) => item.type === button.dataset.asset);
-    activePlacement = asset;
-    placementHint.textContent = `${asset.icon} แตะพื้นเพื่อวาง ${asset.name} • แตะ Add อีกครั้งเพื่อยกเลิก`;
-    placementHint.classList.remove('hidden');
-    closePanel();
-    showToast(`พร้อมวาง ${asset.name}`);
+    if (asset) startPlacement(asset);
   }));
+}
+
+function focusSelected() {
+  const entity = selectedId ? store.getEntity(selectedId) : null;
+  if (!entity) return;
+  orbitTarget.set(entity.position[0], 0.8, entity.position[2]);
+  orbitDistance = Math.max(8, Math.min(16, 10 + (entity.scale || 1) * 2));
+  updateCamera();
+  closePanel();
+}
+
+function beginMoveSelected() {
+  const entity = selectedId ? store.getEntity(selectedId) : null;
+  if (!entity || entity.id === 'player') return;
+  activePlacement = null;
+  placementMarker.enabled = false;
+  moveSelectedMode = true;
+  selectionMarker.enabled = true;
+  placementHint.textContent = `✋ ลาก ${entity.name} ไปตำแหน่งใหม่ แล้วปล่อย`;
+  placementHint.classList.remove('hidden');
+  closePanel();
+  showToast('ลากบนพื้นเพื่อย้ายของ');
 }
 
 function renderLogicPanel() {
   const entity = selectedId ? store.getEntity(selectedId) : null;
   if (!entity || entity.id === 'player') {
-    panel.innerHTML = `${panelHeader('Logic', 'เลือก Object หรือ Character ในโลกก่อน')}
+    panel.innerHTML = `${panelHeader('Logic', 'แตะ Object หรือ Character ในโลกก่อน')}
       <div class="logic-card"><div class="logic-line"><div class="logic-key">WHEN</div><div class="logic-value">Player approaches Mia</div></div><div class="logic-line"><div class="logic-key">DO</div><div class="logic-value">Talk</div></div></div>
-      <p style="opacity:.58;font-size:12px;line-height:1.55;margin:12px 2px 0">ใน v0.1 Logic ถูกแปลงเป็น Behavior ที่เข้าใจง่ายก่อน ระบบ WHEN → IF → DO เต็มรูปแบบจะต่อยอดจาก Project Schema เดียวกัน</p>`;
+      <p style="opacity:.58;font-size:12px;line-height:1.55;margin:12px 2px 0">ตอนนี้ใช้ Behavior ง่าย ๆ ก่อน ระบบ WHEN → IF → DO เต็มรูปแบบจะต่อจาก Project Schema เดียวกัน</p>`;
     bindClose();
     return;
   }
 
   const character = entity.type === 'npc' || entity.type === 'slime';
   const talk = entity.interaction?.type === 'talk';
-  panel.innerHTML = `${panelHeader(`${iconFor(entity.type)} ${entity.name}`, 'แตะเลือกสิ่งที่อยากให้มันทำ')}
-    <div class="section-title">Edit object</div>
-    <div class="toolbar-row">
-      <button data-move="left">←</button><button data-move="up">↑</button><button data-move="down">↓</button><button data-move="right">→</button>
-    </div>
-    <div class="property-row"><div><label>Rotation</label><small>หมุนวัตถุทีละ 15°</small></div><div class="segmented"><button data-rotate="-15">−</button><button data-rotate="15">＋</button></div></div>
-    <div class="property-row"><div><label>Size</label><small>ปรับขนาดแบบง่าย</small></div><div class="segmented"><button data-scale="0.9">−</button><button data-scale="1.1">＋</button></div></div>
+  panel.innerHTML = `${panelHeader(`${iconFor(entity.type)} ${entity.name}`, 'แก้จากคำสั่งง่าย ๆ บนมือถือ')}
+    <div class="quick-edit-row"><button class="wide-btn accent" data-move-ground>✋ Move on ground</button><button class="wide-btn" data-focus-selected>◎ Focus</button></div>
+    <div class="section-title">Fine tune</div>
+    <div class="toolbar-row"><button data-move="left">←</button><button data-move="up">↑</button><button data-move="down">↓</button><button data-move="right">→</button></div>
+    <div class="property-row"><div><label>Rotation</label><small>${Math.round(entity.rotationY || 0)}°</small></div><div class="segmented"><button data-rotate="-15">−15°</button><button data-rotate="15">+15°</button></div></div>
+    <div class="property-row"><div><label>Size</label><small>${Number(entity.scale || 1).toFixed(2)}×</small></div><div class="segmented"><button data-scale="0.9">−</button><button data-scale="1.1">＋</button></div></div>
     ${character ? `<div class="section-title">Movement</div><div class="choice-grid"><button class="choice ${entity.behavior === 'stay' ? 'active' : ''}" data-behavior="stay"><span>📍</span><strong>Stay</strong></button><button class="choice ${entity.behavior === 'wander' ? 'active' : ''}" data-behavior="wander"><span>🚶</span><strong>Walk around</strong></button><button class="choice ${entity.behavior === 'follow' ? 'active' : ''}" data-behavior="follow"><span>🧲</span><strong>Follow</strong></button></div>` : ''}
-    ${entity.type === 'npc' ? `<div class="section-title">Interaction</div><div class="property-row"><div><label>Talk when near</label><small>ผู้เล่นเข้าใกล้แล้วพูด</small></div><div class="segmented"><button data-talk="on" class="${talk ? 'active' : ''}">ON</button><button data-talk="off" class="${!talk ? 'active' : ''}">OFF</button></div></div>` : ''}
+    ${entity.type === 'npc' ? `<div class="section-title">Interaction</div><div class="property-row"><div><label>Talk when near</label><small>${talk ? entity.interaction.text : 'ปิดอยู่'}</small></div><div class="segmented"><button data-talk="on" class="${talk ? 'active' : ''}">ON</button><button data-talk="off" class="${!talk ? 'active' : ''}">OFF</button></div></div>` : ''}
     <div class="section-title">Object</div>
-    <div class="toolbar-row"><button data-duplicate>⧉ Copy</button><button data-delete style="grid-column: span 3;color:#ffdfe5">Delete</button></div>`;
+    <div class="object-actions"><button class="wide-btn" data-duplicate>⧉ Copy</button><button class="wide-btn danger" data-delete>Delete</button></div>`;
   bindClose();
+  panel.querySelector('[data-move-ground]')?.addEventListener('click', beginMoveSelected);
+  panel.querySelector('[data-focus-selected]')?.addEventListener('click', focusSelected);
   panel.querySelectorAll('[data-move]').forEach((button) => button.addEventListener('click', () => {
     const current = store.getEntity(entity.id);
     const p = [...current.position];
@@ -339,35 +364,49 @@ function renderLogicPanel() {
     store.updateEntity(entity.id, { interaction: button.dataset.talk === 'on' ? { type: 'talk', text: entity.interaction?.text || 'สวัสดี!' } : null });
   }));
   panel.querySelector('[data-duplicate]')?.addEventListener('click', () => {
-    const copy = store.duplicateEntity(entity.id); if (copy) { selectedId = copy.id; updateSelectionMarker(); renderLogicPanel(); }
+    const copy = store.duplicateEntity(entity.id);
+    if (copy) { selectedId = copy.id; updateSelectionMarker(); renderLogicPanel(); showToast('คัดลอกแล้ว'); }
   });
   panel.querySelector('[data-delete]')?.addEventListener('click', () => {
-    if (store.removeEntity(entity.id)) { selectedId = null; closePanel(); updateSelectionMarker(); }
+    if (store.removeEntity(entity.id)) { selectedId = null; closePanel(); updateSelectionMarker(); showToast('ลบแล้ว'); }
   });
 }
 
 function openProjectMenu() {
+  if (playMode) return;
   activePanel = 'menu';
   panel.classList.remove('hidden');
-  panel.innerHTML = `${panelHeader('Project', 'My First Game • autosaved on this device')}
-    <div class="menu-sheet">
+  const safeName = store.project.meta.name.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  panel.innerHTML = `${panelHeader('Project', `${store.project.entities.length} objects • autosaved on this device`)}
+    <div class="section-title">Game name</div>
+    <div class="rename-row"><input data-project-name value="${safeName}" maxlength="80" aria-label="Game name"><button data-save-name>Save</button></div>
+    <div class="menu-sheet project-actions">
       <button data-export>⇩ Export project JSON</button>
       <button data-reset>↺ Reset starter world</button>
-      <button data-about>ⓘ About Nuitool v0.1</button>
+      <button data-about>ⓘ About Nuitool v0.4</button>
     </div>`;
   bindClose();
+  const saveName = () => {
+    const input = panel.querySelector('[data-project-name]');
+    store.setProjectName(input?.value || 'Untitled Game');
+    showToast('ชื่อเกมบันทึกแล้ว ✓');
+    openProjectMenu();
+  };
+  panel.querySelector('[data-save-name]')?.addEventListener('click', saveName);
+  panel.querySelector('[data-project-name]')?.addEventListener('keydown', (event) => { if (event.key === 'Enter') saveName(); });
   panel.querySelector('[data-export]')?.addEventListener('click', () => {
     const blob = new Blob([store.exportJSON()], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'nuitool-project.json'; a.click();
+    a.href = url; a.download = `${store.project.meta.name.replace(/[^a-z0-9-_]+/gi, '-').toLowerCase() || 'nuitool-project'}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     showToast('Exported project JSON');
   });
   panel.querySelector('[data-reset]')?.addEventListener('click', () => {
+    if (!confirm('Reset starter world? งานปัจจุบันจะถูกแทนที่ แต่ Undo ยังใช้ได้')) return;
     store.reset(); selectedId = null; closePanel(); showToast('Starter world restored');
   });
-  panel.querySelector('[data-about]')?.addEventListener('click', () => showToast('Nuitool v0.1 • Touch-first game creator'));
+  panel.querySelector('[data-about]')?.addEventListener('click', () => showToast('Nuitool v0.4 • Touch-first game creator'));
 }
 
 function screenToGround(clientX, clientY) {
@@ -394,18 +433,33 @@ function pickNearest(clientX, clientY) {
     const view = entityViews.get(descriptor.id);
     if (!view) continue;
     const screen = camera.camera.worldToScreen(view.getPosition());
-    const dx = screen.x - x;
-    const dy = screen.y - y;
-    const distance = Math.hypot(dx, dy);
+    const distance = Math.hypot(screen.x - x, screen.y - y);
     if (distance < bestDistance) { best = descriptor; bestDistance = distance; }
   }
   return best;
+}
+
+function previewGroundPoint(clientX, clientY) {
+  const point = screenToGround(clientX, clientY);
+  if (!point) return null;
+  const x = Number(pc.math.clamp(point.x, -38, 38).toFixed(2));
+  const z = Number(pc.math.clamp(point.z, -38, 38).toFixed(2));
+  if (activePlacement) {
+    placementMarker.enabled = true;
+    placementMarker.setPosition(x, 0.04, z);
+  }
+  if (moveSelectedMode && selectedId) {
+    selectionMarker.enabled = true;
+    selectionMarker.setPosition(x, 0.04, z);
+  }
+  return { x, z };
 }
 
 const pointers = new Map();
 let gestureMoved = false;
 let pointerStart = null;
 let lastPinchDistance = null;
+let lastGroundPreview = null;
 
 canvas.addEventListener('pointerdown', (event) => {
   if (playMode) return;
@@ -413,6 +467,7 @@ canvas.addEventListener('pointerdown', (event) => {
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
   pointerStart = { x: event.clientX, y: event.clientY, yaw: orbitYaw, pitch: orbitPitch };
   gestureMoved = false;
+  lastGroundPreview = (activePlacement || moveSelectedMode) ? previewGroundPoint(event.clientX, event.clientY) : null;
   if (pointers.size === 2) {
     const [a, b] = [...pointers.values()];
     lastPinchDistance = Math.hypot(a.x - b.x, a.y - b.y);
@@ -437,6 +492,12 @@ canvas.addEventListener('pointermove', (event) => {
   const dx = event.clientX - pointerStart.x;
   const dy = event.clientY - pointerStart.y;
   if (Math.hypot(dx, dy) > 7) gestureMoved = true;
+
+  if (activePlacement || moveSelectedMode) {
+    lastGroundPreview = previewGroundPoint(event.clientX, event.clientY);
+    return;
+  }
+
   if (gestureMoved) {
     orbitYaw = pointerStart.yaw - dx * .22;
     orbitPitch = pc.math.clamp(pointerStart.pitch + dy * .18, 18, 70);
@@ -449,19 +510,44 @@ canvas.addEventListener('pointerup', (event) => {
   const wasTwoFinger = pointers.size > 1;
   pointers.delete(event.pointerId);
   if (!pointers.size) lastPinchDistance = null;
-  if (wasTwoFinger || gestureMoved) { pointerStart = null; return; }
+  if (wasTwoFinger) { pointerStart = null; return; }
 
   if (activePlacement) {
-    const point = screenToGround(event.clientX, event.clientY);
+    const point = lastGroundPreview || previewGroundPoint(event.clientX, event.clientY);
     if (point) {
-      const entity = store.addEntity(activePlacement.type, activePlacement.name, [Number(point.x.toFixed(2)), 0, Number(point.z.toFixed(2))]);
+      const entity = store.addEntity(activePlacement.type, activePlacement.name, [point.x, 0, point.z]);
       selectedId = entity.id;
       activePlacement = null;
+      placementMarker.enabled = false;
       placementHint.classList.add('hidden');
       updateSelectionMarker();
       showToast(`${iconFor(entity.type)} วาง ${entity.name} แล้ว`);
     }
-  } else {
+    pointerStart = null;
+    lastGroundPreview = null;
+    return;
+  }
+
+  if (moveSelectedMode) {
+    const point = lastGroundPreview || previewGroundPoint(event.clientX, event.clientY);
+    const entity = selectedId ? store.getEntity(selectedId) : null;
+    moveSelectedMode = false;
+    placementHint.classList.add('hidden');
+    if (point && entity) {
+      store.updateEntity(entity.id, { position: [point.x, entity.position[1], point.z] });
+      showToast(`ย้าย ${entity.name} แล้ว`);
+      activePanel = 'logic';
+      panel.classList.remove('hidden');
+      renderLogicPanel();
+    } else {
+      updateSelectionMarker();
+    }
+    pointerStart = null;
+    lastGroundPreview = null;
+    return;
+  }
+
+  if (!gestureMoved) {
     const picked = pickNearest(event.clientX, event.clientY);
     selectedId = picked?.id || null;
     updateSelectionMarker();
@@ -469,6 +555,8 @@ canvas.addEventListener('pointerup', (event) => {
       activePanel = 'logic';
       panel.classList.remove('hidden');
       renderLogicPanel();
+    } else {
+      closePanel();
     }
   }
   pointerStart = null;
@@ -477,14 +565,19 @@ canvas.addEventListener('pointerup', (event) => {
 canvas.addEventListener('pointercancel', (event) => {
   pointers.delete(event.pointerId);
   pointerStart = null;
+  lastGroundPreview = null;
+  if (!pointers.size) lastPinchDistance = null;
 });
 
 bottomNav.querySelectorAll('[data-panel]').forEach((button) => button.addEventListener('click', () => {
   if (button.dataset.panel === 'add' && activePlacement) {
-    activePlacement = null;
-    placementHint.classList.add('hidden');
-    showToast('ยกเลิกการวาง');
+    cancelPlacement();
     return;
+  }
+  if (moveSelectedMode) {
+    moveSelectedMode = false;
+    placementHint.classList.add('hidden');
+    updateSelectionMarker();
   }
   openPanel(button.dataset.panel);
 }));
@@ -515,7 +608,9 @@ joystick.addEventListener('pointerdown', (event) => {
 joystick.addEventListener('pointermove', (event) => { if (joystickState.pointerId === event.pointerId) setJoystick(event); });
 function releaseJoystick(event) {
   if (joystickState.pointerId !== event.pointerId) return;
-  joystickState.pointerId = null; joystickState.x = 0; joystickState.y = 0;
+  joystickState.pointerId = null;
+  joystickState.x = 0;
+  joystickState.y = 0;
   joystickKnob.style.transform = 'translate(0,0)';
 }
 joystick.addEventListener('pointerup', releaseJoystick);
@@ -526,6 +621,8 @@ function enterPlayMode() {
   playMode = true;
   closePanel();
   activePlacement = null;
+  moveSelectedMode = false;
+  placementMarker.enabled = false;
   placementHint.classList.add('hidden');
   selectionMarker.enabled = false;
   selectionPill.classList.add('hidden');
@@ -617,7 +714,8 @@ function updateBehaviors(dt) {
         state.wanderTarget.set(state.origin.x + Math.cos(angle) * radius, 0, state.origin.z + Math.sin(angle) * radius);
         state.wanderTimer = 1.8 + Math.random() * 2.8;
       }
-      const direction = state.wanderTarget.clone().sub(pos); direction.y = 0;
+      const direction = state.wanderTarget.clone().sub(pos);
+      direction.y = 0;
       if (direction.lengthSq() > .04) {
         direction.normalize();
         view.setPosition(pos.clone().add(direction.mulScalar(dt * (descriptor.type === 'slime' ? 1.1 : 1.35))));
@@ -627,7 +725,8 @@ function updateBehaviors(dt) {
 
     if (descriptor.behavior === 'follow' && (descriptor.type === 'npc' || descriptor.type === 'slime')) {
       const pos = view.getPosition();
-      const direction = playerPos.clone().sub(pos); direction.y = 0;
+      const direction = playerPos.clone().sub(pos);
+      direction.y = 0;
       const distance = direction.length();
       if (distance > 2.2) {
         direction.normalize();
@@ -650,16 +749,14 @@ function updateInteractions() {
     const view = entityViews.get(descriptor.id);
     if (!view || !view.enabled) continue;
     const distance = playerPos.distance(view.getPosition());
-    if (distance < nearest) { nearby = { descriptor, view, distance }; nearest = distance; }
+    if (distance < nearest) { nearby = { descriptor, view }; nearest = distance; }
   }
   if (!nearby) { lastInteractionKey = ''; return; }
   const { descriptor, view } = nearby;
   const key = `${descriptor.id}:${descriptor.interaction.type}`;
   if (key === lastInteractionKey) return;
   lastInteractionKey = key;
-  if (descriptor.interaction.type === 'talk') {
-    showToast(`${descriptor.name}: ${descriptor.interaction.text}`, 2600);
-  }
+  if (descriptor.interaction.type === 'talk') showToast(`${descriptor.name}: ${descriptor.interaction.text}`, 2600);
   if (descriptor.interaction.type === 'collect') {
     view.enabled = false;
     showToast(descriptor.interaction.text || 'Collected!', 1800);
@@ -697,10 +794,11 @@ app.on('update', (dt) => {
   updateHealth(dt);
 });
 
+window.Nuitool = Object.freeze({
+  version: '0.4.0',
+  getProject: () => JSON.parse(store.exportJSON())
+});
+
 window.addEventListener('resize', () => app.resizeCanvas());
-
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
-}
-
-showToast('Nuitool พร้อมแล้ว • แตะ + Add เพื่อเริ่มสร้าง', 2500);
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+showToast('Nuitool v0.4 • Add ของ แล้วลากไปวางได้เลย', 2500);
