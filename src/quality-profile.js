@@ -12,7 +12,7 @@ export function fallbackQualityFromSignals({ deviceMemory, hardwareConcurrency, 
   const memory = finite(deviceMemory, 4);
   const cores = finite(hardwareConcurrency, 4);
   const pixels = finite(pixelCount, 1920 * 1080);
-  if (memory <= 3 || cores <= 4 || pixels > 4_500_000) return 'eco';
+  if (memory <= 3 || cores <= 4 || pixels > 7_000_000) return 'eco';
   if (memory >= 8 && cores >= 8 && pixels <= 4_000_000) return 'high';
   return 'balanced';
 }
