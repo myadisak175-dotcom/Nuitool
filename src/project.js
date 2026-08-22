@@ -15,12 +15,36 @@ function finiteNumber(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
+function normalizeRule(raw, entityIds) {
+  if (!raw || typeof raw !== 'object') return null;
+  const targetId = String(raw.targetId || raw.when?.entityId || '').trim();
+  if (!targetId || !entityIds.has(targetId)) return null;
+  const whenType = ['player_near', 'player_touch'].includes(raw.when?.type) ? raw.when.type : 'player_near';
+  const actionType = ['message', 'collect'].includes(raw.action?.type) ? raw.action.type : 'message';
+  const defaultDistance = whenType === 'player_touch' ? 1.25 : 2.35;
+  return {
+    id: String(raw.id || uid('rule')).slice(0, 100),
+    name: String(raw.name || 'Game rule').slice(0, 80),
+    enabled: raw.enabled !== false,
+    targetId,
+    when: {
+      type: whenType,
+      distance: Math.min(8, Math.max(0.4, finiteNumber(raw.when?.distance, defaultDistance)))
+    },
+    action: {
+      type: actionType,
+      text: String(raw.action?.text || (actionType === 'collect' ? 'Collected!' : 'Hello!')).slice(0, 240)
+    }
+  };
+}
+
 export function validateProject(input) {
   if (!input || typeof input !== 'object') return { ok: false, error: 'Project must be an object.' };
   if (input.schemaVersion !== 1) return { ok: false, error: 'Unsupported Project Schema version.' };
   if (!input.world || typeof input.world !== 'object') return { ok: false, error: 'World data is missing.' };
   if (!Array.isArray(input.entities)) return { ok: false, error: 'Entities list is missing.' };
   if (input.entities.length > 1000) return { ok: false, error: 'This v0.x prototype limits projects to 1,000 entities.' };
+  if (Array.isArray(input.rules) && input.rules.length > 250) return { ok: false, error: 'This v0.x prototype limits projects to 250 rules.' };
 
   const seen = new Set();
   const normalized = {
@@ -34,7 +58,8 @@ export function validateProject(input) {
       ground: ['meadow', 'dirt', 'sand', 'stone'].includes(input.world.ground) ? input.world.ground : 'meadow',
       sky: ['day', 'sunset', 'night'].includes(input.world.sky) ? input.world.sky : 'day'
     },
-    entities: []
+    entities: [],
+    rules: []
   };
 
   for (const raw of input.entities) {
@@ -67,6 +92,16 @@ export function validateProject(input) {
       id: 'player', type: 'player', name: 'Player', position: [0, 0, 4], rotationY: 180,
       scale: 1, behavior: 'player', interaction: null
     });
+    seen.add('player');
+  }
+
+  const ruleIds = new Set();
+  for (const rawRule of Array.isArray(input.rules) ? input.rules : []) {
+    const rule = normalizeRule(rawRule, seen);
+    if (!rule) continue;
+    if (ruleIds.has(rule.id)) rule.id = uid('rule');
+    ruleIds.add(rule.id);
+    normalized.rules.push(rule);
   }
 
   return { ok: true, project: normalized };
@@ -80,80 +115,26 @@ export function createStarterProject() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     },
-    world: {
-      ground: 'meadow',
-      sky: 'day'
-    },
+    world: { ground: 'meadow', sky: 'day' },
     entities: [
+      { id: 'player', type: 'player', name: 'Player', position: [0, 0, 4], rotationY: 180, scale: 1, behavior: 'player', interaction: null },
+      { id: 'starter-house', type: 'house', name: 'Village House', position: [-4.5, 0, -3.5], rotationY: 18, scale: 1, behavior: 'stay', interaction: null },
+      { id: 'starter-tree-a', type: 'tree', name: 'Round Tree', position: [4.2, 0, -3.3], rotationY: -20, scale: 1, behavior: 'stay', interaction: null },
+      { id: 'starter-tree-b', type: 'pine', name: 'Pine', position: [7.2, 0, 0.6], rotationY: 12, scale: 0.9, behavior: 'stay', interaction: null },
+      { id: 'starter-npc', type: 'npc', name: 'Mia', position: [3.2, 0, 1.1], rotationY: -95, scale: 1, behavior: 'wander', interaction: null },
+      { id: 'starter-flowers', type: 'flowers', name: 'Flowers', position: [-1.8, 0, -1.6], rotationY: 0, scale: 1.15, behavior: 'stay', interaction: null },
+      { id: 'starter-coin', type: 'coin', name: 'Coin', position: [0.9, 0, -2.4], rotationY: 0, scale: 1, behavior: 'spin', interaction: null }
+    ],
+    rules: [
       {
-        id: 'player',
-        type: 'player',
-        name: 'Player',
-        position: [0, 0, 4],
-        rotationY: 180,
-        scale: 1,
-        behavior: 'player',
-        interaction: null
+        id: 'rule-mia-talk', name: 'Mia says hello', enabled: true, targetId: 'starter-npc',
+        when: { type: 'player_near', distance: 2.35 },
+        action: { type: 'message', text: 'สวัสดี! ฉันชื่อ Mia 🌱' }
       },
       {
-        id: 'starter-house',
-        type: 'house',
-        name: 'Village House',
-        position: [-4.5, 0, -3.5],
-        rotationY: 18,
-        scale: 1,
-        behavior: 'stay',
-        interaction: null
-      },
-      {
-        id: 'starter-tree-a',
-        type: 'tree',
-        name: 'Round Tree',
-        position: [4.2, 0, -3.3],
-        rotationY: -20,
-        scale: 1,
-        behavior: 'stay',
-        interaction: null
-      },
-      {
-        id: 'starter-tree-b',
-        type: 'pine',
-        name: 'Pine',
-        position: [7.2, 0, 0.6],
-        rotationY: 12,
-        scale: 0.9,
-        behavior: 'stay',
-        interaction: null
-      },
-      {
-        id: 'starter-npc',
-        type: 'npc',
-        name: 'Mia',
-        position: [3.2, 0, 1.1],
-        rotationY: -95,
-        scale: 1,
-        behavior: 'wander',
-        interaction: { type: 'talk', text: 'สวัสดี! ฉันชื่อ Mia 🌱' }
-      },
-      {
-        id: 'starter-flowers',
-        type: 'flowers',
-        name: 'Flowers',
-        position: [-1.8, 0, -1.6],
-        rotationY: 0,
-        scale: 1.15,
-        behavior: 'stay',
-        interaction: null
-      },
-      {
-        id: 'starter-coin',
-        type: 'coin',
-        name: 'Coin',
-        position: [0.9, 0, -2.4],
-        rotationY: 0,
-        scale: 1,
-        behavior: 'spin',
-        interaction: { type: 'collect', text: 'เก็บเหรียญแล้ว +1' }
+        id: 'rule-coin-collect', name: 'Collect coin', enabled: true, targetId: 'starter-coin',
+        when: { type: 'player_touch', distance: 1.25 },
+        action: { type: 'collect', text: 'เก็บเหรียญแล้ว +1' }
       }
     ]
   };
@@ -165,6 +146,7 @@ export class ProjectStore {
     this.history = [];
     this.future = [];
     this.project = this.load() || createStarterProject();
+    if (!Array.isArray(this.project.rules)) this.project.rules = [];
     this.save();
   }
 
@@ -232,12 +214,7 @@ export class ProjectStore {
   addEntity(type, name, position = [0, 0, 0]) {
     this.checkpoint();
     const entity = {
-      id: uid(type),
-      type,
-      name: name || type,
-      position: [...position],
-      rotationY: 0,
-      scale: 1,
+      id: uid(type), type, name: name || type, position: [...position], rotationY: 0, scale: 1,
       behavior: type === 'npc' || type === 'slime' ? 'stay' : type === 'coin' ? 'spin' : 'stay',
       interaction: type === 'npc' ? { type: 'talk', text: 'สวัสดี!' } : type === 'coin' ? { type: 'collect', text: 'เก็บแล้ว!' } : null
     };
@@ -265,6 +242,7 @@ export class ProjectStore {
     if (index < 0) return false;
     this.checkpoint();
     this.project.entities.splice(index, 1);
+    this.project.rules = (this.project.rules || []).filter((rule) => rule.targetId !== id);
     this.notify('remove');
     return true;
   }
@@ -279,8 +257,61 @@ export class ProjectStore {
     copy.position[0] += 1.2;
     copy.position[2] += 1.2;
     this.project.entities.push(copy);
+    for (const rule of this.getRulesForEntity(source.id)) {
+      const ruleCopy = clone(rule);
+      ruleCopy.id = uid('rule');
+      ruleCopy.targetId = copy.id;
+      ruleCopy.name = `${rule.name} copy`;
+      this.project.rules.push(ruleCopy);
+    }
     this.notify('duplicate');
     return copy;
+  }
+
+  getRulesForEntity(entityId) {
+    return (this.project.rules || []).filter((rule) => rule.targetId === entityId);
+  }
+
+  addRule(targetId, config = {}) {
+    if (!this.getEntity(targetId)) return null;
+    this.checkpoint();
+    const whenType = ['player_near', 'player_touch'].includes(config.whenType) ? config.whenType : 'player_near';
+    const actionType = ['message', 'collect'].includes(config.actionType) ? config.actionType : 'message';
+    const rule = {
+      id: uid('rule'),
+      name: String(config.name || `${whenType} → ${actionType}`).slice(0, 80),
+      enabled: true,
+      targetId,
+      when: { type: whenType, distance: whenType === 'player_touch' ? 1.25 : 2.35 },
+      action: { type: actionType, text: String(config.text || (actionType === 'collect' ? 'Collected!' : 'Hello!')).slice(0, 240) }
+    };
+    this.project.rules.push(rule);
+    this.notify('rule:add');
+    return rule;
+  }
+
+  updateRule(id, patch = {}) {
+    const rule = (this.project.rules || []).find((item) => item.id === id);
+    if (!rule) return null;
+    this.checkpoint();
+    if (typeof patch.enabled === 'boolean') rule.enabled = patch.enabled;
+    if (patch.text != null) rule.action.text = String(patch.text).slice(0, 240);
+    if (['player_near', 'player_touch'].includes(patch.whenType)) {
+      rule.when.type = patch.whenType;
+      rule.when.distance = patch.whenType === 'player_touch' ? 1.25 : 2.35;
+    }
+    if (['message', 'collect'].includes(patch.actionType)) rule.action.type = patch.actionType;
+    this.notify('rule:update');
+    return rule;
+  }
+
+  removeRule(id) {
+    const index = (this.project.rules || []).findIndex((rule) => rule.id === id);
+    if (index < 0) return false;
+    this.checkpoint();
+    this.project.rules.splice(index, 1);
+    this.notify('rule:remove');
+    return true;
   }
 
   importJSON(json) {
