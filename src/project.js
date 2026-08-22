@@ -11,6 +11,67 @@ function uid(prefix = 'entity') {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+function finiteNumber(value, fallback = 0) {
+  return Number.isFinite(Number(value)) ? Number(value) : fallback;
+}
+
+export function validateProject(input) {
+  if (!input || typeof input !== 'object') return { ok: false, error: 'Project must be an object.' };
+  if (input.schemaVersion !== 1) return { ok: false, error: 'Unsupported Project Schema version.' };
+  if (!input.world || typeof input.world !== 'object') return { ok: false, error: 'World data is missing.' };
+  if (!Array.isArray(input.entities)) return { ok: false, error: 'Entities list is missing.' };
+  if (input.entities.length > 1000) return { ok: false, error: 'This v0.x prototype limits projects to 1,000 entities.' };
+
+  const seen = new Set();
+  const normalized = {
+    schemaVersion: 1,
+    meta: {
+      name: String(input.meta?.name || 'Imported Game').slice(0, 80),
+      createdAt: input.meta?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    world: {
+      ground: ['meadow', 'dirt', 'sand', 'stone'].includes(input.world.ground) ? input.world.ground : 'meadow',
+      sky: ['day', 'sunset', 'night'].includes(input.world.sky) ? input.world.sky : 'day'
+    },
+    entities: []
+  };
+
+  for (const raw of input.entities) {
+    if (!raw || typeof raw !== 'object') return { ok: false, error: 'An entity is invalid.' };
+    const id = String(raw.id || '').trim();
+    const type = String(raw.type || '').trim();
+    if (!id || !type) return { ok: false, error: 'Every entity needs an id and type.' };
+    if (seen.has(id)) return { ok: false, error: `Duplicate entity id: ${id}` };
+    seen.add(id);
+    const p = Array.isArray(raw.position) ? raw.position : [0, 0, 0];
+    normalized.entities.push({
+      id,
+      type,
+      name: String(raw.name || type).slice(0, 80),
+      position: [finiteNumber(p[0]), finiteNumber(p[1]), finiteNumber(p[2])],
+      rotationY: finiteNumber(raw.rotationY),
+      scale: Math.min(8, Math.max(0.1, finiteNumber(raw.scale, 1))),
+      behavior: String(raw.behavior || (type === 'player' ? 'player' : 'stay')),
+      interaction: raw.interaction && typeof raw.interaction === 'object'
+        ? {
+            type: String(raw.interaction.type || ''),
+            text: String(raw.interaction.text || '').slice(0, 240)
+          }
+        : null
+    });
+  }
+
+  if (!normalized.entities.some((entity) => entity.id === 'player' && entity.type === 'player')) {
+    normalized.entities.unshift({
+      id: 'player', type: 'player', name: 'Player', position: [0, 0, 4], rotationY: 180,
+      scale: 1, behavior: 'player', interaction: null
+    });
+  }
+
+  return { ok: true, project: normalized };
+}
+
 export function createStarterProject() {
   return {
     schemaVersion: 1,
@@ -112,8 +173,8 @@ export class ProjectStore {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
-      if (parsed?.schemaVersion !== 1 || !Array.isArray(parsed.entities)) return null;
-      return parsed;
+      const result = validateProject(parsed);
+      return result.ok ? result.project : null;
     } catch {
       return null;
     }
@@ -160,6 +221,12 @@ export class ProjectStore {
     this.checkpoint();
     Object.assign(this.project.world, patch);
     this.notify('world');
+  }
+
+  setProjectName(name) {
+    this.checkpoint();
+    this.project.meta.name = String(name || 'Untitled Game').trim().slice(0, 80) || 'Untitled Game';
+    this.notify('meta');
   }
 
   addEntity(type, name, position = [0, 0, 0]) {
@@ -214,6 +281,20 @@ export class ProjectStore {
     this.project.entities.push(copy);
     this.notify('duplicate');
     return copy;
+  }
+
+  importJSON(json) {
+    try {
+      const parsed = typeof json === 'string' ? JSON.parse(json) : json;
+      const result = validateProject(parsed);
+      if (!result.ok) return result;
+      this.checkpoint();
+      this.project = result.project;
+      this.notify('import');
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error?.message || 'Could not parse project JSON.' };
+    }
   }
 
   reset() {
