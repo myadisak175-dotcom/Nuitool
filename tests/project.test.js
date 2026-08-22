@@ -80,3 +80,23 @@ test('removing an object removes rules that target it', () => {
   assert.equal(store.removeEntity(object.id), true);
   assert.equal(store.getRulesForEntity(object.id).length, 0);
 });
+
+test('imported GLB entity type survives schema validation', () => {
+  const project = createStarterProject();
+  project.entities.push({
+    id: 'custom-house',
+    type: 'user-model:local-asset-123',
+    name: 'My House',
+    position: [5, 0, -2],
+    rotationY: 25,
+    scale: 1.2,
+    behavior: 'stay',
+    interaction: null
+  });
+  const result = validateProject(project);
+  assert.equal(result.ok, true);
+  const custom = result.project.entities.find((entity) => entity.id === 'custom-house');
+  assert.equal(custom.type, 'user-model:local-asset-123');
+  assert.deepEqual(custom.position, [5, 0, -2]);
+  assert.equal(custom.scale, 1.2);
+});
