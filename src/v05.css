@@ -1,0 +1,116 @@
+.rule-list {
+  display: grid;
+  gap: 9px;
+}
+
+.rule-card {
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 17px;
+  padding: 11px;
+  background: rgba(255,255,255,.045);
+}
+
+.rule-card.disabled {
+  opacity: .48;
+}
+
+.rule-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.rule-top strong {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rule-top button {
+  flex: 0 0 auto;
+  border: 1px solid rgba(138,124,255,.38);
+  border-radius: 999px;
+  background: rgba(138,124,255,.15);
+  color: #fff;
+  padding: 6px 9px;
+  font-size: 9px;
+}
+
+.rule-edit-row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto auto;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.rule-edit-row input,
+.rule-composer input,
+.rule-field select {
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 12px;
+  background: rgba(255,255,255,.055);
+  color: #f7f8ff;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 11px;
+  outline: none;
+}
+
+.rule-edit-row button {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  background: rgba(255,255,255,.06);
+  min-width: 44px;
+  color: #fff;
+}
+
+.rule-edit-row button:last-child {
+  color: #ffdfe5;
+  background: rgba(255,122,144,.1);
+}
+
+.rule-composer {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 11px;
+  border-radius: 17px;
+  border: 1px dashed rgba(138,124,255,.35);
+  background: rgba(138,124,255,.055);
+}
+
+.rule-field {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.rule-field label {
+  font-size: 9px;
+  letter-spacing: .09em;
+  opacity: .46;
+}
+
+.rule-field select {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.rule-field select option {
+  color: #111827;
+}
+
+.empty-rule {
+  border: 1px dashed rgba(255,255,255,.09);
+  border-radius: 15px;
+  padding: 12px;
+  font-size: 11px;
+  opacity: .48;
+  text-align: center;
+}
