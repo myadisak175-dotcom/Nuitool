@@ -1,0 +1,67 @@
+.logic-recipes {
+  margin: 10px 0;
+}
+
+.logic-recipes-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.logic-recipes-head strong {
+  font-size: 11px;
+}
+
+.logic-recipes-head small {
+  font-size: 9px;
+  opacity: .42;
+  text-align: right;
+}
+
+.logic-recipe-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.logic-recipe-grid button {
+  min-width: 0;
+  min-height: 86px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 4px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 15px;
+  background: rgba(255,255,255,.04);
+  color: #fff;
+  padding: 8px 5px;
+  font: inherit;
+}
+
+.logic-recipe-grid button:active:not(:disabled) {
+  transform: scale(.97);
+  background: rgba(138,124,255,.16);
+}
+
+.logic-recipe-grid button:disabled {
+  opacity: .42;
+}
+
+.logic-recipe-grid span {
+  font-size: 20px;
+}
+
+.logic-recipe-grid strong {
+  font-size: 10px;
+}
+
+.logic-recipe-grid small {
+  max-width: 100%;
+  font-size: 8px;
+  opacity: .48;
+  line-height: 1.25;
+  text-align: center;
+}
