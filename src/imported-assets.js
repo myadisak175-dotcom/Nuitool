@@ -146,6 +146,32 @@ export async function checkImportedModel(id) {
   return record;
 }
 
+export async function restoreImportedModel({ id, name, filename, bytes, createdAt = null }) {
+  const stableId = String(id || '').trim();
+  if (!stableId || stableId.length > 180) throw new Error('Bundled 3D asset has an invalid id.');
+  const raw = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+  if (!raw.byteLength) throw new Error(`Bundled 3D asset ${stableId} is empty.`);
+  if (raw.byteLength > MAX_GLB_BYTES) throw new Error(`Bundled 3D asset ${stableId} is over the 25 MB per-asset limit.`);
+  const safeFilename = String(filename || `${stableId}.glb`).slice(0, 160);
+  const blob = new Blob([raw], { type: 'model/gltf-binary' });
+  const doctor = await inspectGlb(blob);
+  const record = {
+    id: stableId,
+    name: String(name || safeFilename.replace(/\.glb$/i, '') || 'Imported Model').slice(0, 80),
+    filename: safeFilename.toLowerCase().endsWith('.glb') ? safeFilename : `${safeFilename}.glb`,
+    size: blob.size,
+    mime: 'model/gltf-binary',
+    createdAt: createdAt || new Date().toISOString(),
+    restoredAt: new Date().toISOString(),
+    doctor,
+    blob
+  };
+  await transact('readwrite', (store) => store.put(record));
+  containerCache.delete(stableId);
+  registerRecord(record);
+  return record;
+}
+
 export async function deleteImportedModel(id) {
   await transact('readwrite', (store) => store.delete(id));
   containerCache.delete(id);
